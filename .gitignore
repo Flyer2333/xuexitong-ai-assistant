@@ -1,0 +1,13 @@
+node_modules/
+src/local/
+local/
+artifacts/
+*.zip
+*.log
+.env
+.env.*
+!.env.example
+*token*.txt
+*secret*
+*本机.user.js
+.DS_Store

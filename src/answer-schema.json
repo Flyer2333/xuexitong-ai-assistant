@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["answers"],
+  "properties": {
+    "answers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "choices", "readable", "confidence", "explanation"],
+        "properties": {
+          "id": {"type": "string"},
+          "choices": {"type": "array", "items": {"type": "string"}},
+          "readable": {"type": "boolean"},
+          "confidence": {"type": "number"},
+          "explanation": {"type": "string"}
+        }
+      }
+    }
+  }
+}

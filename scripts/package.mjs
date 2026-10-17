@@ -4,7 +4,7 @@ import {deflateRawSync,inflateRawSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
 const root=resolve(import.meta.dirname,'..');
 const {version}=JSON.parse(readFileSync(resolve(root,'package.json'),'utf8'));
-const roots=['src','vendor','tests','scripts','docs','dist','.github','README.md','NOTICE.md','CHANGELOG.md','package.json','.gitignore'];
+const roots=['src','vendor','assets','tests','scripts','docs','dist','.github','README.md','NOTICE.md','CHANGELOG.md','package.json','.gitignore'];
 function walk(path){return statSync(path).isDirectory()?readdirSync(path).filter(name=>!['local','node_modules','artifacts'].includes(name)).flatMap(name=>walk(resolve(path,name))):[path];}
 const files=roots.flatMap(name=>walk(resolve(root,name))).sort();
 let offset=0;const local=[],central=[],records=[];

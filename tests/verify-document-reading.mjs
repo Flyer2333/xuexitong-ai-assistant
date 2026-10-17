@@ -1,10 +1,11 @@
+import {fileURLToPath} from 'node:url';
 import { chromium } from './browser-runtime.mjs';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
 
 const bundle = await readFile(new URL('../dist/xuexitong-ai-assistant.user.js', import.meta.url), 'utf8');
-const temp = resolve(import.meta.dirname,'../artifacts/document-reading');
+const temp = fileURLToPath(new URL('../artifacts/document-reading',import.meta.url));
 await mkdir(temp, { recursive: true });
 const browser = await chromium.launchPersistentContext(resolve(temp, 'profile'), { channel: 'chrome', headless: true, viewport: { width: 1440, height: 1100 } });
 const observations = [];
@@ -13,8 +14,7 @@ function init() {
     const nativeNow = Date.now.bind(Date);
     window.__offset = 0;
     Date.now = () => nativeNow() + window.__offset;
-    window.__gm = { 'xxt-codex-token': 'b'.repeat(64), 'xxt-quiet-enabled': false };
-        window.__gm['xxt-ai-config'] = {provider:'codex',protocol:'codex',baseUrl:'http://127.0.0.1:18763',key:'b'.repeat(64),vision:true};
+    window.__gm = { 'xxt-ai-config':{provider:'codex',protocol:'codex',baseUrl:'http://127.0.0.1:18763',key:'b'.repeat(64),vision:true},'xxt-quiet-enabled':false };
     window.GM_getValue = (key, fallback) => window.__gm[key] ?? fallback;
     window.GM_setValue = (key, value) => { window.__gm[key] = structuredClone(value); };
     window.__opens = 0; window.__modelCalls = 0; window.__closes = 0;
@@ -39,7 +39,7 @@ async function scenario({ mode = 'tab', quiz = false, child = false, stopped = f
         `<a class="file" href="https://mooc1-1.chaoxing.com/materials/${index}-${filename}">${index}-${filename}</a>`).join('');
     const courseHtml = '<div class="prev_title" title="文献阅读">文献阅读</div><div id="coursetree"><ul><li><div class="posCatalog_select posCatalog_active"><span class="posCatalog_name">first</span></div><div class="posCatalog_select"><span class="posCatalog_name">second</span></div></li></ul></div><button id="next">下一节</button>' +
         (quiz ? '<button class="prev_white" id="check">2 章节测验</button>' : '') +
-        (child ? '<iframe id="card" src="https://mooc1-1.chaoxing.com/reading/card" style="width:900px;height:550px"></iframe>' : `<main id="files">${unknown ? '<p>Unrecognized article</p>' : mode === 'inline' ? '<iframe src="https://mooc1-1.chaoxing.com/ananas/modules/pdf/index.html" style="width:850px;height:400px"></iframe>' : links}</main><main id="view"></main>`);
+        (child ? '<iframe id="card" src="https://mooc1-1.chaoxing.com/reading/card" style="width:900px;height:550px"></iframe>' : `<main id="files">${unknown ? '<p>Unrecognized article</p>' : ['inline', 'opaque'].includes(mode) ? `<iframe src="https://${mode === 'opaque' ? 'mooc1-1' : 'mooc1'}.chaoxing.com/ananas/modules/pdf/index.html" style="width:850px;height:400px"></iframe>` : links}</main><main id="view"></main>`);
     await page.route('**/*', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: route.request().url().includes('/modules/pdf/') ? '<!doctype html><div style="height:2500px">Document pages</div>' : route.request().url().includes('/materials/') ? '<p>Document viewer fixture</p>' :
         route.request().url().includes('/reading/card') ? `<main id="files">${links}</main><main id="view"></main>` : courseHtml }));
     await page.goto('https://mooc1.chaoxing.com/mycourse/studentstudy?courseId=documents');
@@ -75,7 +75,9 @@ async function scenario({ mode = 'tab', quiz = false, child = false, stopped = f
     if (mode === 'modal') await reader.evaluate(() => {
         document.querySelectorAll('.file').forEach(button => button.onclick = () => {
             window.__opens++;
-            document.getElementById('view').innerHTML = '<div role="dialog"><button aria-label="关闭" id="closePreview">×</button><iframe src="https://mooc1-1.chaoxing.com/materials/reading.docx" style="width:600px;height:300px"></iframe></div>';
+            // A supported Word preview must expose real scrollable content. The old
+            // opaque blank iframe only "passed" through the superseded skip-on-error path.
+            document.getElementById('view').innerHTML = '<div role="dialog"><button aria-label="关闭" id="closePreview">×</button><div class="doc-preview" style="height:300px;overflow:auto"><canvas height="1600" width="500"></canvas></div></div>';
             document.getElementById('closePreview').onclick = () => { window.__closes++; document.getElementById('view').replaceChildren(); };
         });
     });
@@ -86,10 +88,11 @@ async function scenario({ mode = 'tab', quiz = false, child = false, stopped = f
     if (unknown) {
         await page.waitForTimeout(1000);
         await owner.evaluate(() => { window.__offset += 3500; });
-        await owner.waitForFunction(() => window.__next === 1);
+        await owner.waitForFunction(() => /未识别到可确认完成的任务/.test(document.querySelector('[data-xxt-codex-panel] pre')?.textContent || ''));
+        assert.equal(await owner.evaluate(() => window.__next), 0, 'Latest policy preserves unrecognized work instead of skipping it.');
     } else {
         for (let index = 0; index < files; index++) {
-            if (mode === 'inline') await owner.waitForFunction(() => /文献已打开/.test(document.querySelector('[data-xxt-codex-panel] pre')?.textContent || ''));
+            if (['inline', 'opaque'].includes(mode)) await owner.waitForFunction(() => /文献已打开/.test(document.querySelector('[data-xxt-codex-panel] pre')?.textContent || ''));
             else await reader.waitForFunction(count => window.__opens === count, index + 1, { timeout: 10000 });
             await reader.waitForFunction(() => /等待 \d+ 秒后关闭/.test(document.querySelector('[data-xxt-codex-panel] pre')?.textContent || '') ||
                 Object.values(window.__gm).some(value => Array.isArray(value)), null, { timeout: 1000 }).catch(() => {});
@@ -110,14 +113,23 @@ async function scenario({ mode = 'tab', quiz = false, child = false, stopped = f
             assert.equal(await reader.evaluate(() => window.__closes), index, 'File must remain open before 60 seconds.');
             assert.equal(await owner.evaluate(() => window.__next), 0);
             await reader.evaluate(() => { window.__offset += 3700; });
+            if (mode === 'opaque') {
+                await owner.waitForFunction(() => /文献任务尚未完成/.test(document.querySelector('[data-xxt-codex-panel] pre')?.textContent || ''));
+                assert.equal(await owner.evaluate(() => window.__next), 0, 'An unresponsive cross-origin preview must not be counted as completed.');
+                break;
+            }
             if (popupClose) await popupClose;
             else if (child) {
                 await owner.waitForFunction(() => window.__next === 1);
                 assert.equal(await owner.evaluate(() => window.__documentFinished), true, 'Document completion is handed to the course before navigation.');
             } else if (mode !== 'inline') await reader.waitForFunction(count => window.__closes === count, index + 1, { timeout: 5000 });
         }
-        if (!stopped) {
-            await owner.waitForFunction(() => window.__next === 1, null, { timeout: 12000 });
+        if (!stopped && mode !== 'opaque') {
+            await owner.waitForFunction(() => window.__next === 1, null, { timeout: 12000 }).catch(async error => {
+                console.error({ mode, quiz, child, stopped, files, unknown });
+                console.error(await owner.locator('[data-xxt-codex-panel] pre').textContent());
+                throw error;
+            });
             assert.equal(await owner.evaluate(() => window.__checks), quiz ? 1 : 0);
             assert.equal(await owner.evaluate(() => window.__modelCalls), quiz ? 1 : 0);
             assert.equal(await owner.evaluate(() => window.__submits), quiz ? 1 : 0);
@@ -135,10 +147,11 @@ try {
     await scenario({ quiz: true });
     await scenario({ mode: 'modal' });
     await scenario({ mode: 'inline' });
+    await scenario({ mode: 'opaque' });
     await scenario({ child: true });
     await scenario({ files: 2 });
     await scenario({ stopped: true });
     await scenario({ unknown: true });
     await writeFile(resolve(temp, 'observations.json'), JSON.stringify(observations, null, 2));
-    console.log('7 document workflows passed: 60-second retention, inline and modal previews, real popup close, quiz handoff, cross-origin frame, multiple files, stop, unknown-step skip. Time is accelerated; platform task completion is synthetic.');
+    console.log('8 document workflows passed: 60-second retention, inline and modal previews, real popup close, quiz handoff, cross-origin frame, multiple files, stop, unsupported-preview and unrecognized-task pause. Time is accelerated; platform task completion is synthetic.');
 } finally { await browser.close(); }

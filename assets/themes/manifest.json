@@ -1,0 +1,17 @@
+[
+  {
+    "id": "nailoong",
+    "file": "assets/themes/nailoong.png",
+    "mime": "image/png",
+    "source": "https://www.nailoong.com/_ipx/q_85/img/business/nl_base_3d.png",
+    "page": "https://www.nailoong.com/business/ipIncubation/",
+    "sha256": "e7efd32883b7319f1af0f08af4ffc6cba96e5a5955c6524a2649fa8fb5adbb5c"
+  },
+  {
+    "id": "naiwa",
+    "file": "assets/themes/naiwa.png",
+    "mime": "image/png",
+    "source": "用户提供的奶蛙形象，经内置 imagegen 去除背景",
+    "sha256": "bae5cb30b3748f482c14e90641f95c411520662c497bc6515ed38b192bcee64f"
+  }
+]

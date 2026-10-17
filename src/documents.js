@@ -21,7 +21,8 @@
         try { const url = new URL(value, doc.baseURI); return /^https?:$/.test(url.protocol) ? url.href : null; } catch { return null; }
     }
     function identity(element, label, url) {
-        const stableId = element.getAttribute('data-objectid') || element.getAttribute('data-fileid') || element.getAttribute('data-jobid');
+        const stableId = element.getAttribute('data-jobid') || element.getAttribute('jobid') || element.getAttribute('data-fileid') ||
+            element.getAttribute('data-objectid') || element.getAttribute('objectid') || element.closest('.ans-attach-ct')?.getAttribute('data-jobid');
         return stableId || `${label}/${url || element.getAttribute('onclick') || element.id || ''}`;
     }
     function viewers(doc) {

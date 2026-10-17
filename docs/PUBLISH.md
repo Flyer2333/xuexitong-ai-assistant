@@ -16,7 +16,7 @@
 1. 登录自己的 GitHub，右上角 **+ → New repository**。
 2. Repository name 填 `xuexitong-ai-assistant`，描述可填“学习通学习助手与可配置 AI API”。未完成授权核对时先保持 Private。
 3. 不需要在网页额外勾选生成 README、License，源码已经提供说明；不要随意给上游衍生文件套 MIT。
-4. 创建后点 **Add file → Upload files**。解压本源码 ZIP，将项目内文件和目录拖进去，保留 `src`、`scripts`、`docs`、`tests`、`vendor`、`dist` 的层级。不要把 ZIP 本身当源码上传。
+4. 创建后点 **Add file → Upload files**。解压本源码 ZIP，将项目内文件和目录拖进去，保留 `src`、`scripts`、`docs`、`tests`、`vendor`、`assets`、`dist` 的层级。不要把 ZIP 本身当源码上传。
 5. 核对 `.gitignore` 和 `.github` 目录，包含自动检查配置及问题反馈模板。网页拖拽可能漏掉点开头的文件或目录，缺失时单独上传，或改用下方 Git 命令。
 6. 填提交说明，提交。到 **Actions** 检查构建与测试为绿色。
 7. 核对授权后在仓库 Settings 调整可见性；公开前再检查提交内容。
@@ -30,7 +30,7 @@ git init
 git add .
 git status --short
 git diff --cached --stat
-git commit -m "Prepare public AI assistant 1.0.4"
+git commit -m "Prepare public AI assistant 1.0.6"
 git branch -M main
 git remote add origin https://github.com/YOUR_NAME/xuexitong-ai-assistant.git
 git push -u origin main
@@ -51,7 +51,7 @@ https://raw.githubusercontent.com/YOUR_NAME/xuexitong-ai-assistant/main/dist/xue
 ## 发布 Release
 
 1. 仓库 **Releases → Draft a new release**。
-2. 创建标签 `v1.0.4`，标题“超星学习通自动化脚本（支持接入各种主流AI模型api） 1.0.4”。
+2. 创建标签 `v1.0.6`，标题“超星学习通自动化脚本（支持接入各种主流AI模型api） 1.0.6”。
 3. 写明此次变化、支持的协议、测试范围、API 费用及来源许可情况。
 4. 上传 `dist/xuexitong-ai-assistant.user.js` 作为可安装附件；源码由 GitHub 自动生成 ZIP。
 5. 核对附件版本与标签一致，确认没有预填 Key，再发布。供用户安装的附件应为 `.user.js`；源码 ZIP 不能通过油猴的备份导入功能安装。

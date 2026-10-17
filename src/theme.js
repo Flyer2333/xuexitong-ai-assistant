@@ -1,41 +1,62 @@
 (() => {
     'use strict';
     const css = `
-[data-xxt-codex-panel]{--ink:#1e293b;--accent:#4f46e5;--line:#e2e8f0;color:var(--ink)!important;font:13px/1.6 system-ui,'Microsoft YaHei',sans-serif!important;color-scheme:light}
+[data-xxt-codex-panel]{--ink:#1e293b;--accent:#4f46e5;--line:#e2e8f0;--surface:#f8fafc;--tint:#eef2ff;--muted:#64748b;--button:#4f46e5;--button-ink:#fff;color:var(--ink)!important;font:13px/1.6 system-ui,'Microsoft YaHei',sans-serif!important;color-scheme:light}
 [data-xxt-codex-panel] *{box-sizing:border-box}
-[data-xxt-codex-panel] .xxt-shell{border:1px solid #d7ddea;border-radius:18px;background:#f8fafc;box-shadow:0 16px 50px #17255424;overflow:hidden}
-[data-xxt-codex-panel] .xxt-head{display:flex;align-items:center;gap:10px;padding:18px;background:linear-gradient(120deg,#eef2ff,#f8fafc);border-bottom:1px solid var(--line);cursor:grab}
-[data-xxt-codex-panel] .xxt-head:before{flex-shrink:0;content:'AI';display:grid;place-items:center;background:#4f46e5;color:#fff;font-weight:800;border-radius:12px;width:38px;height:38px;font-size:14px}
+[data-xxt-codex-panel] .xxt-shell{border:1px solid var(--line);border-radius:18px;background:var(--surface);box-shadow:0 16px 50px #17255424;overflow:hidden}
+[data-xxt-codex-panel] .xxt-head{display:flex;align-items:center;gap:10px;padding:18px;background:linear-gradient(120deg,var(--tint),var(--surface));border-bottom:1px solid var(--line);cursor:grab}
+[data-xxt-codex-panel] .xxt-head:before{flex-shrink:0;content:'AI';display:grid;place-items:center;background:var(--button);color:#fff;font-weight:800;border-radius:12px;width:38px;height:38px;font-size:14px}
 [data-xxt-codex-panel] strong{font-size:16px;letter-spacing:.3px}
-[data-xxt-codex-panel] .xxt-version{color:#64748b;font-size:10px;letter-spacing:1px}
-[data-xxt-codex-panel] .xxt-fold{flex-shrink:0;margin-left:auto;border:0;background:#fff;color:#64748b;border-radius:8px;width:28px;height:28px;cursor:pointer}
+[data-xxt-codex-panel] .xxt-version{color:var(--muted);font-size:10px;letter-spacing:1px}
+[data-xxt-codex-panel] .xxt-fold{flex-shrink:0;margin-left:auto;border:0;background:#fff;color:var(--muted);border-radius:8px;width:28px;height:28px;cursor:pointer}
 [data-xxt-codex-panel] .xxt-body{padding:16px;max-height:70vh;overflow:auto}
 [data-xxt-codex-panel] .xxt-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
 [data-xxt-codex-panel] button{font:inherit;cursor:pointer}
 [data-xxt-codex-panel] .xxt-actions button{margin:0!important;padding:10px!important;border:1px solid #d9dfeb;border-radius:10px;background:#fff;color:#475569;font-weight:600}
-[data-xxt-codex-panel] .xxt-actions button:hover{background:#eef2ff;border-color:#a5b4fc}
-[data-xxt-codex-panel] .xxt-actions [data-action=start]{background:#4f46e5;color:white;border-color:#4f46e5}
+[data-xxt-codex-panel] .xxt-actions button:hover{background:var(--tint);border-color:#a5b4fc}
+[data-xxt-codex-panel] .xxt-actions [data-action=start]{background:var(--button);color:var(--button-ink);border-color:var(--button)}
 [data-xxt-codex-panel] .xxt-actions [data-action=stop]{color:#be123c;background:#fff8fa;border-color:#f5d3dd}
-[data-xxt-codex-panel] .xxt-state{font-size:11px;color:#64748b;display:flex;align-items:center;gap:6px;margin-bottom:8px}
-[data-xxt-codex-panel] .xxt-state:before{content:'';width:6px;height:6px;border-radius:50%;background:#6366f1}
+[data-xxt-codex-panel] .xxt-state{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:8px}
+[data-xxt-codex-panel] .xxt-state:before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent)}
 [data-xxt-codex-panel][data-sleeping=true] .xxt-state:before{background:#94a3b8}
 [data-xxt-codex-panel] pre{font:inherit!important;margin:0!important;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px!important;white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto;color:#475569}
-[data-xxt-codex-panel] .xxt-settings{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;color:#64748b;font-size:11px}
+[data-xxt-codex-panel] .xxt-settings{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;color:var(--muted);font-size:11px}
 [data-xxt-codex-panel] .xxt-rate-setting{display:flex;width:100%;justify-content:space-between;align-items:center}
 [data-xxt-codex-panel] input,[data-xxt-codex-panel] select{font:inherit;color:#334155;background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:7px;min-width:0}
-[data-xxt-codex-panel] input[type=checkbox]{accent-color:#4f46e5;vertical-align:middle;margin:0 4px 0 0}
-[data-xxt-codex-panel] details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;font-size:12px;color:#64748b}
+[data-xxt-codex-panel] input[type=checkbox]{accent-color:var(--accent);vertical-align:middle;margin:0 4px 0 0}
+[data-xxt-codex-panel] details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;font-size:12px;color:var(--muted)}
 [data-xxt-codex-panel] summary{cursor:pointer;font-weight:600;color:#475569}
 [data-xxt-codex-panel] details img{max-width:100%;border-radius:8px;margin-top:8px}
 [data-xxt-codex-panel] .ai-form{display:grid;gap:10px;margin-top:12px}
 [data-xxt-codex-panel] .ai-form>label{display:grid;gap:4px;font-size:11px}
-[data-xxt-codex-panel] .ai-form small{color:#64748b;font-size:11px;line-height:1.6}
+[data-xxt-codex-panel] .ai-form small{color:var(--muted);font-size:11px;line-height:1.6}
 [data-xxt-codex-panel] .ai-buttons{display:flex;gap:8px}
-[data-xxt-codex-panel] .ai-buttons button{border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;border-radius:8px;padding:8px 12px}
-[data-xxt-codex-panel] .xxt-feedback{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;color:#64748b;font-size:11px;line-height:1.7}
+[data-xxt-codex-panel] .ai-buttons button{border:1px solid #c7d2fe;background:var(--tint);color:#4338ca;border-radius:8px;padding:8px 12px}
+[data-xxt-codex-panel] .xxt-feedback{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;color:var(--muted);font-size:11px;line-height:1.7}
 [data-xxt-codex-panel] .xxt-feedback-links{display:flex;gap:14px;margin-bottom:4px}
 [data-xxt-codex-panel] .xxt-feedback a{color:#4f46e5;text-decoration:none;font-weight:600}
 [data-xxt-codex-panel] .xxt-feedback a:hover{text-decoration:underline}
+[data-xxt-codex-panel][data-skin=nailoong]{--ink:#51371f;--accent:#92570d;--line:#eddbb7;--surface:#fffdf5;--tint:#fff1cc;--muted:#7c6a50;--button:#f3c350;--button-ink:#49300f}
+[data-xxt-codex-panel][data-skin=naiwa]{--ink:#4e3d20;--accent:#8a600e;--line:#eadcb4;--surface:#fffef4;--tint:#fff5cf;--muted:#796b49;--button:#eac84b;--button-ink:#49370e}
+[data-xxt-codex-panel] .xxt-head>div{min-width:0;flex:1}
+[data-xxt-codex-panel] .xxt-head strong{font-size:17px;line-height:1.4}
+[data-xxt-codex-panel] .xxt-head:before{color:var(--button-ink)}
+[data-xxt-codex-panel] .xxt-fold{position:relative;z-index:4}
+[data-xxt-codex-panel] .xxt-skin-picker{display:flex;align-items:center;gap:5px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+[data-xxt-codex-panel] .xxt-skin-label{font-size:11px;color:var(--muted);margin-right:auto}
+[data-xxt-codex-panel] .xxt-skin-picker button{font:inherit;font-size:11px;min-height:30px;padding:4px 12px;background:transparent;border:1px solid transparent;border-radius:999px;color:var(--muted)}
+[data-xxt-codex-panel] .xxt-skin-picker button[aria-pressed=true]{color:var(--accent);background:#fff;border-color:var(--line);box-shadow:0 2px 5px #17255408;font-weight:700}
+[data-xxt-codex-panel] button:focus-visible,[data-xxt-codex-panel] summary:focus-visible,[data-xxt-codex-panel] a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+[data-xxt-codex-panel] .xxt-theme-mascot{position:absolute;right:14px;top:-72px;width:120px;height:100px;overflow:hidden;pointer-events:none;z-index:2;filter:drop-shadow(0 5px 6px #54351b20)}
+[data-xxt-codex-panel] .xxt-theme-mascot img{display:block;width:120px;height:auto;user-select:none;-webkit-user-drag:none}
+[data-xxt-codex-panel][data-skin=naiwa] .xxt-theme-mascot{width:120px;height:112px;right:14px;top:-88px;overflow:visible}
+[data-xxt-codex-panel][data-skin=naiwa] .xxt-theme-mascot img{width:120px;height:112px;object-fit:contain}
+[data-xxt-codex-panel] .xxt-feedback details{border:0;margin:3px 0 0;padding:0;font-size:11px}
+[data-xxt-codex-panel] .xxt-feedback summary{display:inline-block;color:#4f46e5;font-weight:600}
+[data-xxt-codex-panel] .xxt-feedback summary:before{content:'▸';display:inline-block;margin-right:4px}
+[data-xxt-codex-panel] .xxt-feedback details[open] summary:before{content:'▾'}
+[data-xxt-codex-panel] .xxt-feedback-copy{margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--tint)}
+[data-xxt-codex-panel] .xxt-feedback-copy>div+div{margin-top:6px}
 [data-xxt-codex-panel] [hidden]{display:none!important}
 `;
     function aiSettings(onChange) {
@@ -83,7 +104,24 @@
         panel.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:2147483647;width:min(360px,calc(100vw - 36px));text-align:left';
         const make = (tag,cls) => { const el = document.createElement(tag); el.className = cls; return el; };
         const shell = make('div','xxt-shell'), header = make('header','xxt-head'), name = document.createElement('div');
-        const version = make('div','xxt-version'); version.textContent = 'LEARNING ASSISTANT · 1.0.4'; name.append(title,version);
+        const version = make('div','xxt-version'); version.textContent = 'LEARNING ASSISTANT · 1.0.6'; name.append(title,version);
+        const picker = make('div','xxt-skin-picker'); picker.setAttribute('role','group'); picker.setAttribute('aria-label','外观主题');
+        const pickerLabel = make('span','xxt-skin-label'); pickerLabel.textContent = '外观'; picker.append(pickerLabel);
+        const mascot = make('div','xxt-theme-mascot'); mascot.setAttribute('aria-hidden','true'); mascot.hidden = true;
+        const mascotImage = document.createElement('img'); mascotImage.alt = ''; mascotImage.draggable = false; mascot.append(mascotImage);
+        const skins = { default: ['默认','学习助手'], nailoong: ['奶龙','奶龙·学习助手'], naiwa: ['奶蛙','奶蛙·学习助手'] };
+        function applySkin(value, persist = false) {
+            const id = Object.hasOwn(skins,value) ? value : 'default'; panel.dataset.skin = id; title.textContent = skins[id][1];
+            for (const button of picker.querySelectorAll('button')) button.setAttribute('aria-pressed',String(button.dataset.skinChoice === id));
+            const image = id !== 'default' && typeof XxtThemeAssets !== 'undefined' && XxtThemeAssets[id];
+            mascot.hidden = !image;
+            if (image) mascotImage.src = image; else mascotImage.removeAttribute('src');
+            if (persist) GM_setValue('xxt-ui-skin',id);
+        }
+        for (const [id,[label]] of Object.entries(skins)) {
+            const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.dataset.skinChoice = id;
+            button.onclick = () => applySkin(id,true); picker.append(button);
+        }
         const body = make('div','xxt-body'), fold = make('button','xxt-fold'); fold.textContent = '−'; fold.title = '收起面板';
         fold.onclick = () => { body.hidden = !body.hidden; fold.textContent = body.hidden ? '+' : '−'; fold.title = body.hidden ? '展开面板' : '收起面板'; };
         const status = make('div','xxt-state'); status.textContent = '学习流程 · 多模型接入';
@@ -103,13 +141,19 @@
             link.href = `https://github.com/Flyer2333/xuexitong-ai-assistant/issues/new?template=${template}`;
             link.target = '_blank'; link.rel = 'noopener noreferrer'; feedbackLinks.append(link);
         }
-        const feedbackNote = document.createElement('div'); feedbackNote.textContent = '遇到 Bug 或有新功能想法？欢迎提交，作者会及时排查修复、评估并持续完善功能。';
+        const feedbackNote = document.createElement('div'); feedbackNote.textContent = '问题反馈请附脚本版本、复现步骤和面板提示；功能建议请说明具体使用场景，方便作者定位和改进。';
         const privacyNote = document.createElement('div'); privacyNote.textContent = '提交前请遮挡 API Key、连接码及个人信息。不会自动上传页面或日志。';
-        feedback.append(feedbackLinks,feedbackNote,privacyNote);
-        actions.className = 'xxt-actions'; body.append(actions,status,output,aiSettings(onAiChange),settings,details,feedback); header.append(name,fold); shell.append(header,body); panel.replaceChildren(shell);
+        const feedbackDetails = document.createElement('details'); feedbackDetails.dataset.feedbackDetails = 'true';
+        const feedbackSummary = document.createElement('summary'); feedbackSummary.textContent = '反馈说明';
+        const feedbackCopy = make('div','xxt-feedback-copy');
+        const authorNote = document.createElement('div'); authorNote.textContent = '脚本根据作者自己的实际使用需求编写，并持续完善。遇到暂不支持的场景，或有希望增加的功能，欢迎及时反馈；作者会第一时间跟进，评估后补充相应设置和功能。';
+        feedbackCopy.append(authorNote,feedbackNote,privacyNote); feedbackDetails.append(feedbackSummary,feedbackCopy);
+        feedback.append(feedbackLinks,feedbackDetails);
+        actions.className = 'xxt-actions'; body.append(actions,status,output,aiSettings(onAiChange),settings,details,feedback); header.append(name,fold); shell.append(header,picker,body); panel.replaceChildren(shell,mascot);
+        applySkin(GM_getValue('xxt-ui-skin','default'));
         let drag;
         header.onpointerdown = event => { if (event.button !== 0 || event.target.closest('button')) return; const r = panel.getBoundingClientRect(); drag = {x:event.clientX-r.left,y:event.clientY-r.top}; header.setPointerCapture(event.pointerId); event.preventDefault(); };
-        header.onpointermove = event => { if (!drag) return; const r = panel.getBoundingClientRect(); panel.style.left = `${Math.max(8,Math.min(innerWidth-r.width-8,event.clientX-drag.x))}px`; panel.style.top = `${Math.max(8,Math.min(innerHeight-60,event.clientY-drag.y))}px`; panel.style.right = 'auto'; panel.style.bottom = 'auto'; };
+        header.onpointermove = event => { if (!drag) return; const r = panel.getBoundingClientRect(); panel.style.left = `${Math.max(8,Math.min(innerWidth-r.width-8,event.clientX-drag.x))}px`; panel.style.top = `${Math.max(panel.dataset.skin === 'default' ? 8 : 78,Math.min(innerHeight-60,event.clientY-drag.y))}px`; panel.style.right = 'auto'; panel.style.bottom = 'auto'; };
         header.onpointerup = header.onpointercancel = () => { drag = null; };
         return status;
     }

@@ -477,6 +477,11 @@
                 return this._treeContainerEl;
             },
             _getVideoEl() {
+                if (globalThis.XxtCodexControl?.videoCandidate) {
+                    const candidate = globalThis.XxtCodexControl.videoCandidate();
+                    if (this._videoEl !== candidate) { this._detachVideoEvents(); this._videoEl = candidate; }
+                    return this._videoEl;
+                }
                 if (this._videoEl && !this._isLiveVideo(this._videoEl)) { this._detachVideoEvents(); this._videoEl = null; }
                 if (!this._videoEl) this._videoEl = document.querySelector('video#video_html5_api,video[id*="video_html5"]');
                 if (!this._videoEl) {

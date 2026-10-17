@@ -1,0 +1,1 @@
+Built-in imagegen; background-extraction. Remove only the white background, preserve the entire yellow Naiwa silhouette, green eyes, brown hand touching chin, pose, colors and shading. True transparent PNG with smooth antialiased edges. No outline, frame, backdrop, added anatomy or redesign. Small transparent margin. Intended use: UI mascot above panel top-right.

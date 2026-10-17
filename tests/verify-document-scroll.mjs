@@ -1,21 +1,24 @@
-import { resolve } from 'node:path';
+import {fileURLToPath} from 'node:url';
 import { chromium } from './browser-runtime.mjs';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 
-// Structure observed read-only in the supported reader template on 2026-10-16.
+// Structure observed read-only in the user's Edge course on 2026-10-16.
 // URLs/content below are synthetic; no signed source URL, course identifiers or model requests.
-const bundle = await readFile(new URL('../dist/xuexitong-ai-assistant.user.js', import.meta.url), 'utf8');
-const temp = resolve(import.meta.dirname,'../artifacts/document-scroll');
+let bundle = await readFile(new URL('../dist/xuexitong-ai-assistant.user.js', import.meta.url), 'utf8');
+if (process.argv.includes('--debug')) bundle = bundle
+    .replace('notify(`正在打开文献：${entry.label}`);', 'window.__docEvents.push({open:entry.id,task,at:Date.now(),completed:[...completed]}); notify(`正在打开文献：${entry.label}`);')
+    .replace("if (data.type === 'document-finished') {", "if (data.type === 'document-finished') { window.__docEvents.push({received:data.documentIds,at:Date.now(),assets:pageInventory().documents.map(x=>({id:x.id,file:x.entry?.id,inline:x.entry?.inline,tag:x.entry?.element.tagName,same:x.root===event.source,desc:descendant(x.root,event.source)}))});");
+const temp = fileURLToPath(new URL('../artifacts/document-scroll',import.meta.url));
 await mkdir(temp, { recursive: true });
 const context = await chromium.launchPersistentContext(`${temp}/profile`, { channel: 'chrome', headless: true });
 const observations = [];
 function init() {
+    window.__docEvents = [];
     window.unsafeWindow = window;
     window.__offset = 0;
     const now = Date.now.bind(Date); Date.now = () => now() + window.__offset;
-    window.__gm = { 'xxt-quiet-enabled': false, 'xxt-codex-token': 'b'.repeat(64) };
-        window.__gm['xxt-ai-config'] = {provider:'codex',protocol:'codex',baseUrl:'http://127.0.0.1:18763',key:'b'.repeat(64),vision:true};
+    window.__gm = {'xxt-quiet-enabled':false,'xxt-ai-config':{provider:'codex',protocol:'codex',baseUrl:'http://127.0.0.1:18763',key:'b'.repeat(64),vision:true}};
     window.GM_getValue = (key, fallback) => window.__gm[key] ?? fallback;
     window.GM_setValue = (key, value) => { window.__gm[key] = structuredClone(value); };
     window.__documentGranted = false;
@@ -86,6 +89,7 @@ const position = frame => frame.evaluate(() => {
     const e = document.scrollingElement; return { top: e.scrollTop, max: Math.max(0, e.scrollHeight - e.clientHeight), grown: !!window.__grown };
 });
 try {
+    if (!process.argv.includes('--workflow-only')) {
     for (const cross of [false, true]) {
         const f = await fixture({ cross, lazy: true });
         await f.page.evaluate(() => window.scrollTo(0, 200));
@@ -128,12 +132,15 @@ try {
         assert.equal(result.unavailable, 1); assert.equal((await position(f.leaf)).top, 0);
         observations.push({ case: 'night rest rejects reader scrolling', result }); await f.page.close();
     }
-    for (const quiz of [false, true]) {
+    }
+    for (const quiz of process.argv.includes('--workflow-only') ? [false] : [false, true]) {
         const f = await fixture({ quiz, lazy: true });
         await f.page.locator('[data-action="start"]').click();
         await f.page.waitForFunction(() => /文献已打开/.test(document.querySelector('[data-xxt-codex-panel] pre')?.textContent));
         const owners = await Promise.all(f.page.frames().map(frame => frame.evaluate(() => window.__documentGranted)));
-        assert.equal(owners.filter(Boolean).length, 1, 'Only one nested reader is granted the task.');
+        // The coordinator now reads an accessible file itself when no worker has
+        // claimed it yet. Zero remote owners is valid; two are never valid.
+        assert(owners.filter(Boolean).length <= 1, 'At most one nested reader is granted the task.');
         for (const frame of f.page.frames()) await frame.evaluate(() => { window.__offset += 49000; });
         await f.leaf.waitForFunction(() => document.scrollingElement.scrollTop > 0);
         assert.equal(await f.page.evaluate(() => window.__next), 0, 'No early exit before 60 seconds.');
@@ -142,10 +149,17 @@ try {
             for (const frame of f.page.frames()) console.log(JSON.stringify({ path: new URL(frame.url()).pathname,
                 state: await frame.evaluate(() => ({ status: document.querySelector('[data-xxt-codex-panel] pre')?.textContent,
                     next: window.__next, checks: window.__checks, docs: Object.keys(window.__gm).filter(k => k.startsWith('xxt-documents:')),
+                    docEvents: window.__docEvents, values: Object.fromEntries(Object.entries(window.__gm).filter(([k]) => k.startsWith('xxt-documents:'))),
                     top: document.scrollingElement?.scrollTop, height: document.scrollingElement?.scrollHeight })) }));
             throw error;
         });
         const end = await position(f.leaf);
+        if (!(end.grown && end.max - end.top <= 2)) {
+            console.log('Scroll workflow did not verify the leaf', JSON.stringify({ quiz, end, owners }));
+            for (const frame of f.page.frames()) console.log(JSON.stringify({ path: new URL(frame.url()).pathname,
+                info: await frame.evaluate(() => ({ status: document.querySelector('[data-xxt-codex-panel] pre')?.textContent,
+                    entries: XxtCodexDocuments.find(document).map(x => x.id), rects: [...document.querySelectorAll('iframe')].map(x => ({ src: x.getAttribute('src'), rect: x.getBoundingClientRect().toJSON() })) })) }));
+        }
         assert(end.grown && end.max - end.top <= 2, 'Workflow reached lazy last page before leaving.');
         const counts = await f.page.evaluate(() => ({ next: window.__next, checks: window.__checks, submits: window.__submits, calls: window.__calls }));
         assert.equal(counts.checks, quiz ? 1 : 0); assert.equal(counts.submits, quiz ? 1 : 0);

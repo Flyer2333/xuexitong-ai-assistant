@@ -9,6 +9,7 @@
     const F = XxtCodexDocuments;
     const I = XxtCodexInterruptions;
     const Q = XxtVideoQuiz;
+    const P = globalThis.XxtPageTasks;
     const nonce = crypto.randomUUID();
     const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
     const isTop = pageWindow === pageWindow.top;
@@ -20,6 +21,10 @@
     let coordinator = null, coordinatorDistance = Infinity, expectedCheckTask = '', expectedVideoTask = '', navigationRequested = false;
     let expectedDocumentTask = '', documentReportedTask = '', openedDocument = null, documentOwner = null;
     let topicOwner = null, topicReportedTask = '';
+    let pageReviewNeeded = false, pageSignature = '', pageChangedAt = 0, pageBlockedAt = 0;
+    let pageVideo = null, pagePlaying = false, stepTransition = null, currentCard = '', stepDone = new Set();
+    let parentReadingFiles = false;
+    const topicDone = new WeakSet();
     let quietPaused = false, resumeAfterQuiet = false, unknownSince = 0, unknownTask = '';
     const quietNow = () => GM_getValue('xxt-quiet-enabled', true) && XxtCodexCore.quietHoursAt();
     let selectedPlaybackRate = XxtCodexCore.normalizePlaybackRate(GM_getValue('xxt-playback-rate', 1));
@@ -47,6 +52,7 @@
     const completedTasks = new Set();
     const completedMedia = new Set();
     const completedDocumentSenders = new Set();
+    const completedFileAssets = new Set();
     const coursePage = () => !!document.getElementById('coursetree');
     function courseTask() {
         const active = document.querySelector('#coursetree .posCatalog_active');
@@ -76,6 +82,9 @@
     function setTask(value) {
         if (task === value) return;
         topicOwner?.cancel(); topicOwner = null; topicReportedTask = '';
+        pageReviewNeeded = false; pageSignature = ''; pageChangedAt = Date.now(); pageBlockedAt = 0;
+        stepTransition = null; currentCard = ''; stepDone = new Set(); pageVideo = null;
+        completedFileAssets.clear();
         if (coursePage() && task) {
             for (const [source, entry] of quizFrames) {
                 retiredQuizForms.add(`${entry.nonce}/${entry.signature}`);
@@ -119,6 +128,171 @@
         record.paused = true; save(); notify(reason);
         if (coursePage()) { stopPlayer(); for (const [source, entry] of controlledFrames()) post(source, 'stop', { target: entry.nonce }); }
         if (!isTop && !coursePage()) report('pause', { reason, task });
+    }
+    function pageInventory() {
+        const view = P?.scan(pageWindow);
+        if (view) for (const [source, entry] of frames) {
+            if (!visibleDescendant(pageWindow, source)) continue;
+            const list = entry.kind === 'video' ? view.videos : entry.kind === 'document' ? view.documents : entry.kind === 'check' ? view.questions : null;
+            // A wrapper worker may own assets in its descendants. Do not invent an
+            // extra "file" for that worker after the real file has already finished.
+            if (!list || list.some(asset => covers(asset, source, entry.kind))) continue;
+            list.push({ id: `agent:${entry.nonce}`, win: source, root: source, video: null, entry: null });
+        }
+        if (view && view.signature !== pageSignature) { pageSignature = view.signature; pageChangedAt = Date.now(); }
+        return view;
+    }
+    function covers(asset, source, kind) {
+        if (kind === 'document') return asset.root === source || asset.win === source ||
+            descendant(asset.root, source) || descendant(source, asset.root);
+        if (kind === 'video' && !asset.video) return asset.root === source || descendant(asset.root, source);
+        // A native video or quiz belongs to its own document, not to every
+        // descendant worker underneath the course/card window.
+        return asset.win === source;
+    }
+    function sourceFinished(asset, kind) {
+        for (const [source, entry] of frames) {
+            if (!covers(asset, source, kind)) continue;
+            if (kind === 'video' && (entry.ended || completedMedia.has(`${entry.nonce}/${entry.mediaId}`))) return true;
+            if (kind === 'document' && completedDocumentSenders.has(entry.nonce)) return true;
+            if (kind === 'check' && completedSenders.has(entry.nonce)) return true;
+        }
+        return false;
+    }
+    function videoDone(asset) { return asset.video?.ended || P.complete(asset.container) || sourceFinished(asset, 'video'); }
+    function fileDone(asset) { return (GM_getValue(`xxt-documents:${task}`, []) || []).includes(asset.entry?.id) ||
+        completedFileAssets.has(asset.id) || (!asset.entry && sourceFinished(asset, 'document')); }
+    function questionDone(asset) { return sourceFinished(asset, 'check') || (asset.win === pageWindow && record.phase === 'done'); }
+    function pendingKnowledge(view = pageInventory()) {
+        if (!view) return false;
+        return view.loading.length || view.videos.some(asset => !videoDone(asset)) || view.documents.some(asset => !fileDone(asset)) ||
+            (R?.find(pageWindow) || []).some(entry => !topicDone.has(entry.element)) ||
+            view.markers.some(marker => marker.kind !== 'check' && !marker.done);
+    }
+    function videoCandidate() {
+        if (!coursePage() || !P || stepTransition) return null;
+        return pageInventory().videos.find(asset => !videoDone(asset))?.video || null;
+    }
+    function blockPage(reason) {
+        pageReviewNeeded = true; pageBlockedAt ||= Date.now();
+        notify(reason);
+        if (Date.now() - pageBlockedAt > 20000) throw new Error(`${reason}，已暂停，保留当前章节`);
+        return true;
+    }
+    function resetCard(id) {
+        if (currentCard === id) return;
+        if (currentCard) {
+            for (const [source, entry] of controlledFrames()) post(source, 'stop', { target: entry.nonce });
+            epoch++; inFlight?.abort(); closeDocument(); topicOwner?.cancel(); topicOwner = null;
+            frames.clear(); quizFrames.clear(); stopPlayer();
+            record = {}; save();
+        }
+        currentCard = id; expectedCheckTask = ''; expectedVideoTask = ''; expectedDocumentTask = '';
+        completedFileAssets.clear();
+        documentReportedTask = ''; topicReportedTask = ''; navigationRequested = false; videoFinishProbe = null;
+        pageReviewNeeded = false; pageSignature = ''; pageChangedAt = Date.now(); pageBlockedAt = 0; pageVideo = null;
+    }
+    function syncCard() {
+        if (!P || !coursePage()) return false;
+        const steps = P.steps(document), card = steps.items[steps.index];
+        if (stepTransition) {
+            let fresh = false;
+            try { fresh = document.querySelector('#iframe')?.contentDocument !== stepTransition.previousDocument; } catch { fresh = true; }
+            if (!card || card.id !== stepTransition.id || !fresh) return blockPage('正在等待当前学习步骤的新内容加载');
+            stepTransition = null;
+        }
+        if (card) resetCard(card.id);
+        return false;
+    }
+    function nextStudyStep() {
+        if (!P) return false;
+        const steps = P.steps(document), card = steps.items[steps.index];
+        if (!card) return false;
+        stepDone.add(card.id);
+        const next = steps.items.find(item => !stepDone.has(item.id));
+        if (!next) return false;
+        beforeClick();
+        let previousDocument;
+        try { previousDocument = document.querySelector('#iframe')?.contentDocument; } catch {}
+        stepTransition = { id: next.id, previousDocument };
+        stopPlayer();
+        next.element.click(); notify(`当前页任务已完成，进入本章步骤：${next.label}`);
+        return true;
+    }
+    async function coordinatePage() {
+        const view = pageInventory();
+        if (!view) return false;
+        const pending = view.videos.find(asset => !videoDone(asset));
+        if (pending) {
+            pageReviewNeeded = true;
+            expectedVideoTask = task; expectedDocumentTask = ''; expectedCheckTask = '';
+            if (pending.video) {
+                pageBlockedAt = 0;
+                const video = pending.video;
+                if (pageVideo !== video) {
+                    pageVideo?.pause(); window.app?._detachVideoEvents?.();
+                    video.scrollIntoView({ block: 'center', behavior: 'auto' });
+                    const play = video.ownerDocument.querySelector('.vjs-big-play-button');
+                    if (video.readyState === 0 && D.enabled(play)) { beforeClick(); play.click(); }
+                }
+                pageVideo = video;
+                if (!pagePlaying && video.paused) {
+                    pagePlaying = true;
+                    try {
+                        if (window.app) { window.app.configs.autoplay = true; await window.app.play(); }
+                        else { applyMediaRate(video); await video.play(); }
+                    } catch (error) { if (!selectedMuted) audioBlocked(); else notify(`等待视频可播放：${error.message}`); }
+                    finally { pagePlaying = false; }
+                }
+                notify(`正在播放本页视频 ${view.videos.indexOf(pending) + 1}/${view.videos.length}，全部完成后再处理其他任务…`);
+            } else {
+                pending.container?.scrollIntoView({ block: 'center', behavior: 'auto' });
+                const agent = [...frames].find(([source, entry]) => entry.kind === 'video' && covers(pending, source, 'video'));
+                if (agent) grant(agent[0], agent[1]);
+                else blockPage('正在等待本页剩余视频组件加载');
+            }
+            return true;
+        }
+        if (view.videos.length) pageReviewNeeded = true;
+        if (pageVideo) { pageVideo = null; pageReviewNeeded = true; stopPlayer(); }
+        const file = view.documents.find(asset => !fileDone(asset));
+        if (file) {
+            pageReviewNeeded = true; expectedVideoTask = ''; expectedDocumentTask = task;
+            file.entry?.element.scrollIntoView({ block: 'center', behavior: 'auto' });
+            const agent = [...frames].find(([source, entry]) => entry.kind === 'document' && !completedDocumentSenders.has(entry.nonce) && covers(file, source, 'document'));
+            if (agent) { documentOwner = agent[0]; grant(agent[0], agent[1]); }
+            else if (file.entry) {
+                parentReadingFiles = true;
+                try { await readDocuments([file.entry]); }
+                finally { parentReadingFiles = false; }
+            }
+            else blockPage('等待本页文献组件接入');
+            return true;
+        }
+        if (view.documents.length) pageReviewNeeded = true;
+        if (view.loading.length) return blockPage('正在等待页面所有任务加载');
+        if ((R?.find(pageWindow) || []).some(entry => !topicDone.has(entry.element))) { await readTopics(); return true; }
+        const pendingMarker = view.markers.find(marker => marker.kind !== 'check' && !marker.done);
+        if (pendingMarker) return blockPage(pendingMarker.kind === 'unknown' ? '存在无法识别且尚未完成的任务点' : '正在等待平台确认本页知识任务点完成');
+        pageBlockedAt = 0;
+        const question = view.questions.find(asset => !questionDone(asset));
+        if (question && question.win !== pageWindow) {
+            question.frame?.scrollIntoView({ block: 'center', behavior: 'auto' });
+            const agent = [...frames].find(([source, entry]) => entry.kind === 'check' && source === question.win);
+            if (agent) { expectedCheckTask = task; grant(agent[0], agent[1]); }
+            else notify('等待本页检测组件接入…');
+            return true;
+        }
+        return false;
+    }
+    function transitionBlocked(includeChecks = false) {
+        const view = pageInventory();
+        if (!view) return false;
+        pageReviewNeeded = true;
+        if (pendingKnowledge(view) || (includeChecks && view.questions.some(asset => !questionDone(asset)))) return true;
+        if (includeChecks && view.markers.some(marker => !marker.done)) return blockPage('平台仍有任务点未完成');
+        if (Date.now() - pageChangedAt < 2000) { notify('正在复核本页任务清单，等待内容稳定…'); return true; }
+        return false;
     }
     function request(path, payload) {
         const job = XxtAi.request(path, payload); inFlight = job;
@@ -321,6 +495,10 @@
     }
     async function advanceCourse(reason) {
         if (hasVideoQuiz()) { notify('视频弹题尚未结束，等待作答后再切节。'); return; }
+        if (completedTasks.has(courseTask())) return;
+        if (transitionBlocked(true)) return;
+        if (nextStudyStep()) return;
+        pageReviewNeeded = false;
         const oldTask = courseTask();
         if (completedTasks.has(oldTask)) return;
         completedTasks.add(oldTask);
@@ -334,9 +512,9 @@
         if (next && !D.enabled(next)) { pause('平台下一节按钮不可用，已停止'); return; }
         notify(`${reason}，正在进入下一节…`);
         beforeClick();
-        if (D.readResult(document) || D.extract(document).length || F.find(document).length) navigationContent = { task: oldTask, signature: checkContent(), at: Date.now() };
+        if (P || D.readResult(document) || D.extract(document).length || F.find(document).length) navigationContent = { task: oldTask, signature: checkContent(), at: Date.now() };
         let confirmed = false;
-        if (pendingPrompt) { pendingPrompt.next.click(); confirmed = true; }
+        if (pendingPrompt) { completedTasks.delete(oldTask); pause('平台仍提示当前章节有未完成任务，已保留本节，请核对任务点'); return; }
         else if (next) next.click();
         else if (window.app?.nextUnit) window.app.nextUnit();
         else { pause('未找到课程导航，请手动进入下一节'); return; }
@@ -347,8 +525,7 @@
             if (currentEpoch !== epoch) throw new Error('切换上下文已变化，取消旧导航确认');
             const prompt = !confirmed && D.ancestorNavigationPrompt(pageWindow);
             if (prompt) {
-                beforeClick(); confirmed = true;
-                prompt.next.click(); notify('已确认跳过未完成知识任务，正在等待下一节…');
+                completedTasks.delete(oldTask); pause('平台仍提示有未完成任务，已停止切章，请核对本节任务点'); return;
             }
             await D.delay(200);
         }
@@ -376,7 +553,10 @@
         if (result.ambiguous) throw new Error('结果页有多个重做按钮，已停止');
         if (!result.allCorrect && record.phase === 'redo-clicked' && !record.redoConfirmed && result.fingerprint === record.priorResult) { await finishRedo(); return; }
         // A persisted completion is not proof that the prior navigation message was delivered.
-        if (record.phase === 'done' && navigationRequested) return;
+        if (record.phase === 'done' && navigationRequested) {
+            if (coursePage() && pageReviewNeeded) await advanceCourse(record.doneReason || '检测已完成，复核本章其他任务');
+            return;
+        }
         if (record.priorResult === result.fingerprint && ['submitted', 'redo-clicked'].includes(record.phase)) {
             if (Date.now() - record.at > 30000) throw new Error('成绩页没有更新，已停止，避免重复重做');
             return;
@@ -426,6 +606,8 @@
     function finishVideo() {
         if (!coursePage()) return false;
         if (stopped || quietNow() || hasVideoQuiz()) return true;
+        pageReviewNeeded = true;
+        if (transitionBlocked(true)) return true;
         const nativeVideo = window.app?._getVideoEl?.();
         if (nativeVideo && !nativeVideo.ended) return true;
         const currentTask = courseTask();
@@ -457,6 +639,9 @@
     async function continueKnowledge(reason) {
         beforeClick();
         if (coursePage()) {
+            if (transitionBlocked(true)) return;
+            if (nextStudyStep()) return;
+            pageReviewNeeded = false;
             expectedDocumentTask = ''; expectedVideoTask = '';
             if (expectedCheckTask === courseTask()) return;
             if (findCheckTab()) {
@@ -472,32 +657,35 @@
             await advanceCourse(`${reason}，未发现学习检测`);
         } else throw new Error('未找到课程导航，请返回课程继续');
     }
-    async function afterDocuments() {
+    async function afterDocuments(documentIds = []) {
         beforeClick();
         if (coursePage()) {
             await continueKnowledge('文献预览已停留 60 秒');
         } else if (coordinator) {
-            report('document-finished', { task }); automatic = false;
+            report('document-finished', { task, documentIds }); automatic = false;
         } else throw new Error('文献预览已完成，未找到课程导航，请返回课程继续');
     }
     async function readTopics() {
-        if (!R || !coursePage() || topicReportedTask === task || expectedCheckTask === task) return false;
-        const entries = R.find(pageWindow);
+        if (!R || !coursePage()) return false;
+        const allEntries = R.find(pageWindow);
+        const entries = allEntries.filter(entry => !topicDone.has(entry.element));
         if (!entries.length) return false;
-        if (entries.length !== 1) throw new Error('检测到多个专题阅读入口，已暂停，请先打开要阅读的一项');
         expectedDocumentTask = courseTask(); expectedVideoTask = ''; unknownSince = 0;
         stopPlayer();
         topicOwner ||= R.createOwner({ notify, assertCurrent: beforeClick });
-        if (await topicOwner.step(entries[0], task)) {
-            topicReportedTask = task;
+        const readingTask = `${task}${currentCard ? `/card:${currentCard}` : ''}${allEntries.length > 1 ? `/topic:${allEntries.indexOf(entries[0])}` : ''}`;
+        if (await topicOwner.step(entries[0], readingTask)) {
+            topicDone.add(entries[0].element); topicOwner.cancel(); topicOwner = null;
+            topicReportedTask = task; pageReviewNeeded = true;
             await continueKnowledge('专题目录每项已前台停留90秒');
         }
         return true;
     }
-    async function readDocuments() {
-        if (D.extract(document).length || D.readResult(document) || (coursePage() && expectedCheckTask === courseTask())) return false;
-        const entries = F.find(document);
-        if (!entries.length || documentReportedTask === task) return false;
+    async function readDocuments(override) {
+        if (!override && (D.extract(document).length || D.readResult(document) || (coursePage() && expectedCheckTask === courseTask()))) return false;
+        const entries = override || F.find(document);
+        const already = new Set(GM_getValue(`xxt-documents:${task}`, []) || []);
+        if (!entries.length || entries.every(entry => already.has(entry.id))) return false;
         if (coursePage()) expectedDocumentTask = courseTask();
         busy = true;
         const currentEpoch = epoch;
@@ -512,13 +700,14 @@
                 assertCurrent();
                 if (!entry.element.isConnected) throw new Error('文件入口已变化，取消旧操作');
                 notify(`正在打开文献：${entry.label}`);
-                openedDocument = await F.open(entry, pageWindow, assertCurrent);
+                const ownerDocument = entry.element.ownerDocument;
+                openedDocument = await F.open(entry, ownerDocument.defaultView, assertCurrent);
                 const preview = openedDocument, deadline = Date.now() + 60000;
                 while (Date.now() < deadline) {
                     assertCurrent();
                     if (preview.closed?.()) throw new Error('文件预览提前关闭，已暂停，请重新开始');
                     notify(`文献已打开：${entry.label}，滚动阅读中，等待 ${Math.max(0, Math.ceil((deadline - Date.now()) / 1000))} 秒后关闭…`);
-                    if (preview.root) await F.scroll(document, (60000 - (deadline - Date.now())) / 50000, preview.root, assertCurrent);
+                    if (preview.root) await F.scroll(ownerDocument, (60000 - (deadline - Date.now())) / 50000, preview.root, assertCurrent);
                     await D.delay(200);
                 }
                 if (preview.root) {
@@ -527,13 +716,13 @@
                     let stable = 0, previousExtent = -1;
                     while (stable < 2 && Date.now() < bottomDeadline) {
                         assertCurrent();
-                        const state = await F.scroll(document, 1, preview.root, assertCurrent);
-                        if (state.unavailable || !state.count) throw new Error('此预览无法控制内部滚动，继续尝试本章检测');
+                        const state = await F.scroll(ownerDocument, 1, preview.root, assertCurrent);
+                        if (state.unavailable || !state.count) throw new Error('此预览无法控制内部滚动，不能确认完成');
                         stable = state.count > 0 && !state.unavailable && state.bottom ? (state.extent === previousExtent ? stable + 1 : 1) : 0;
                         previousExtent = state.extent;
                         if (stable < 2) await D.delay(400);
                     }
-                    if (stable < 2) throw new Error('无法确认文档内部滚动到底，继续尝试本章检测');
+                    if (stable < 2) throw new Error('无法确认文档内部滚动到底');
                     notify('文档内部已滚到底（平台任务点以页面显示为准）');
                 }
                 assertCurrent(); preview.close();
@@ -547,11 +736,11 @@
                 notify(`已关闭文献预览：${entry.label}`);
             }
             documentReportedTask = task;
-            await afterDocuments();
+            await afterDocuments(entries.map(entry => entry.id));
         } catch (error) {
             if (!stopped && automatic && !quietNow() && currentEpoch === epoch) {
                 closeDocument(); documentReportedTask = task;
-                if (coursePage()) await continueKnowledge(`文献预览无法识别或处理：${error.message}`);
+                if (coursePage()) throw new Error(`文献任务尚未完成：${error.message}`);
                 else { report('document-unrecognized', { task, reason: error.message }); automatic = false; }
             } else throw error;
         } finally { closeDocument(); busy = false; }
@@ -591,14 +780,14 @@
         if (Date.now() - unknownSince < 3000 || completedTasks.has(courseTask())) return;
         busy = true;
         try {
-            if (expectedCheckTask !== courseTask()) await continueKnowledge('未识别到可处理的知识内容');
-            else await advanceCourse('未识别到可处理的检测题，跳过当前小节');
+            throw new Error('未识别到可确认完成的任务，已暂停，保留本节');
         } finally { busy = false; }
     }
     function checkContent() {
         const result = D.readResult(document);
         return JSON.stringify({ questions: D.extract(document).map(entry => entry.question),
             documents: F.find(document).map(entry => entry.id),
+            pageAssets: P?.scan(pageWindow).signature,
             result: result ? { fingerprint: result.fingerprint, review: result.review } : null });
     }
     async function solveVideoQuiz(hit) {
@@ -802,10 +991,12 @@
             setTask(courseTask()); expectedCheckTask = ''; expectedDocumentTask = ''; expectedVideoTask = courseTask(); frameClaimAt = 0; navigationRequested = false;
             window.app?._reenterVideoMode?.(); return;
         }
+        if (coursePage() && syncCard()) return;
         try {
             const videoQuiz = Q.across(pageWindow)[0];
             if (videoQuiz && (coursePage() || isTop || quizAuthorized)) { await solveVideoQuiz(videoQuiz); return; }
             if (hasVideoQuiz()) return;
+            if (coursePage() && await coordinatePage()) return;
             const result = D.readResult(document);
             if (result) { busy = true; await processResult(result); return; }
             if (await readTopics()) return;
@@ -820,11 +1011,39 @@
                 await solve(true); return;
             }
             if (!coursePage() && ['submitted', 'redo-clicked'].includes(record.phase) && Date.now() - record.at > 30000) throw new Error('平台页面未更新，已停止');
+            if (coursePage() && pageReviewNeeded) {
+                const view = pageInventory();
+                if (expectedCheckTask === task || record.phase === 'done') await advanceCourse('已核对本页所有任务');
+                else if (view?.videos.length) finishVideo();
+                else await continueKnowledge('已核对本页所有任务');
+                return;
+            }
             await skipUnknownStep();
         } catch (error) { pause(error.message); }
         finally { if (!inFlight) busy = false; }
     }
     function grant(source, entry, resume = false) {
+        if (coursePage() && P) {
+            if (parentReadingFiles) return;
+            if (stepTransition) return;
+            const view = pageInventory();
+            const video = view.videos.find(asset => !videoDone(asset));
+            if (entry.kind === 'video' && (!video || !covers(video, source, 'video'))) return;
+            if (entry.kind === 'document') {
+                if (video) return;
+                const file = view.documents.find(asset => !fileDone(asset));
+                if (!file || !covers(file, source, 'document')) return;
+            }
+            if (entry.kind === 'check') {
+                if (pendingKnowledge(view)) return;
+                const question = view.questions.find(asset => !questionDone(asset));
+                if (question && question.root !== source) return;
+            }
+            for (const [otherSource, other] of frames) if (other.running && otherSource !== source) {
+                post(otherSource, 'stop', { target: other.nonce }); other.running = false;
+            }
+            resume ||= !entry.running; entry.running = true;
+        }
         post(source, entry.kind === 'video' ? 'grant-video' : entry.kind === 'document' ? 'grant-document' : 'grant', { target: entry.nonce, task: courseTask(), resume,
             rate: getPlaybackRate(), muted: getMuted(), mediaId: entry.mediaId });
     }
@@ -852,6 +1071,8 @@
         remotePlayAt = Date.now(); remotePlayAttempts++; remotePlayBusy = true;
         applyMediaRate(video, remoteVideoRate);
         try {
+            const play = document.querySelector('.vjs-big-play-button');
+            if (video.readyState === 0 && D.enabled(play)) play.click();
             try { await video.play(); } catch { if (!selectedMuted) throw new Error('浏览器阻止有声自动播放，请手动播放或勾选静音'); video.muted = true; await video.play(); }
             remotePlayAttempts = 0; if (!stopped && automatic) report('status', { task: remoteVideoTask, value: '正在播放本节视频…' });
         } catch { report('status', { task: remoteVideoTask, value: '正在等待新视频加载，尝试自动播放…' }); }
@@ -865,6 +1086,7 @@
         syncPlaybackRate();
         if (coursePage()) {
             setTask(courseTask());
+            if (syncCard()) return;
             if (!checkStep() && expectedCheckTask !== courseTask()) expectedVideoTask = courseTask();
             completedTasks.delete(courseTask());
             for (const [source, entry] of frames) {
@@ -889,6 +1111,7 @@
         }
     }
     function stopPlayer() {
+        pageVideo?.pause();
         if (window.app) { window.app.configs.autoplay = false; window.app._isPlaying = false; window.app._clearCheckInterval(); window.app._videoEl?.pause(); }
     }
     function stop() {
@@ -901,7 +1124,7 @@
         if (panel || !(coursePage() || D.extract(document).length || D.readResult(document) || Q.find(document))) return;
         panel = document.createElement('section'); panel.setAttribute('data-xxt-codex-panel', 'true'); panel.setAttribute('data-html2canvas-ignore', 'true');
         panel.style.cssText = 'position:fixed;right:16px;bottom:16px;z-index:2147483647;width:340px;max-height:65vh;overflow:auto;background:white;color:#172033;border:1px solid #abb8c8;border-radius:10px;padding:14px;box-shadow:0 3px 20px #0002;font:14px/1.6 sans-serif;text-align:left';
-        const title = document.createElement('strong'); title.textContent = '超星学习通自动化脚本（支持接入各种主流AI模型api）'; panel.append(title);
+        const title = document.createElement('strong'); title.textContent = '学习助手'; panel.append(title);
         const actions = document.createElement('div');
         for (const [action, label] of [['connect', '测试 AI'], ['start', '开始自动'], ['solve', '仅看答案'], ['stop', '停止']]) {
             const button = document.createElement('button'); button.textContent = label; button.dataset.action = action; button.style.cssText = 'margin:8px 4px 8px 0;padding:5px 9px;cursor:pointer';
@@ -997,19 +1220,31 @@
                     if (window.app._getVideoEl()?.ended) window.app._continueAfterVideo(); else window.app.play();
                 }
             }
-            if (data.type === 'document-ready' && !F.find(document).length && !completedDocumentSenders.has(data.nonce) && expectedCheckTask !== courseTask() &&
+            if (data.type === 'document-ready' && !F.find(document).length && !completedDocumentSenders.has(data.nonce) &&
                 (!documentOwner || documentOwner === event.source || !canClaim(documentOwner, frames.get(documentOwner))) &&
                 canClaim(event.source, data)) {
-                expectedDocumentTask = courseTask(); expectedVideoTask = '';
                 documentOwner = event.source;
-                frames.set(event.source, { nonce: data.nonce, kind: 'document', viewVisible: data.viewVisible, seenAt: Date.now() });
+                const previous = frames.get(event.source);
+                frames.set(event.source, { nonce: data.nonce, kind: 'document', running: previous?.nonce === data.nonce && previous?.running, viewVisible: data.viewVisible, seenAt: Date.now() });
                 post(event.source, 'owner', { target: data.nonce });
                 if (automatic && !stopped) grant(event.source, frames.get(event.source));
             }
             if (['document-finished', 'document-unrecognized'].includes(data.type) && automatic && !stopped && data.task === courseTask() &&
                 frames.get(event.source)?.nonce === data.nonce && !completedDocumentSenders.has(data.nonce)) {
+                if (data.type === 'document-finished') {
+                    const ids = Array.isArray(data.documentIds) ? data.documentIds : [];
+                    for (const asset of pageInventory()?.documents || []) {
+                        if (asset.root !== event.source && !descendant(asset.root, event.source) && !descendant(event.source, asset.root)) continue;
+                        if (asset.entry && (ids.includes(asset.entry.id) ||
+                            (asset.entry.inline && asset.entry.element.tagName === 'IFRAME' &&
+                                (asset.root === event.source || descendant(asset.root, event.source)))))
+                            completedFileAssets.add(asset.id);
+                    }
+                }
                 completedDocumentSenders.add(data.nonce);
-                (data.type === 'document-unrecognized' ? continueKnowledge('无法识别文献预览') : afterDocuments()).catch(error => pause(error.message));
+                documentOwner = null; pageReviewNeeded = true;
+                if (data.type === 'document-unrecognized') { completedDocumentSenders.delete(data.nonce); pause(`文献任务未完成：${data.reason || '无法识别预览'}`); }
+                else afterDocuments().catch(error => pause(error.message));
             }
             if (data.type === 'confirm-request' && automatic && !stopped && data.task === courseTask() &&
                 frames.get(event.source)?.nonce === data.nonce && frames.get(event.source)?.kind === 'check' &&
@@ -1017,10 +1252,11 @@
                 pendingConfirmations.set(data.requestId, { source: event.source, nonce: data.nonce, task: data.task, kind: data.kind, at: Date.now() });
             }
             if (data.type === 'confirm-cancel' && pendingConfirmations.get(data.requestId)?.source === event.source) pendingConfirmations.delete(data.requestId);
-            if (data.type === 'video-ready' && expectedDocumentTask !== courseTask() && canClaimVideo(event.source, data) &&
+            if (data.type === 'video-ready' && canClaimVideo(event.source, data) &&
                 !(data.ended && expectedCheckTask === courseTask()) && !completedMedia.has(`${data.nonce}/${data.mediaId}`)) {
-                if (data.viewVisible === true) { expectedVideoTask = courseTask(); expectedCheckTask = ''; frameClaimAt = 0; }
-                frames.set(event.source, { nonce: data.nonce, kind: 'video', mediaId: data.mediaId, viewVisible: data.viewVisible, seenAt: Date.now() });
+                const previous = frames.get(event.source);
+                frames.set(event.source, { nonce: data.nonce, kind: 'video', mediaId: data.mediaId, ended: data.ended,
+                    running: previous?.nonce === data.nonce && previous?.running, viewVisible: data.viewVisible, seenAt: Date.now() });
                 post(event.source, 'owner', { target: data.nonce });
                 // The original player owns same-origin videos; the agent is for inaccessible players.
                 if (automatic && !stopped && !parentHasVideo()) grant(event.source, frames.get(event.source));
@@ -1032,16 +1268,17 @@
                 if (!finishVideo()) window.app?._continueAfterVideo();
             }
             if (data.type === 'ready' && !completedSenders.has(data.nonce) && canClaim(event.source, data)) {
-                if (data.viewVisible === true) { expectedCheckTask = courseTask(); expectedDocumentTask = ''; expectedVideoTask = ''; }
-                frames.set(event.source, { nonce: data.nonce, kind: 'check', viewVisible: data.viewVisible, seenAt: Date.now() }); frameClaimAt = Date.now(); frameClaimTask = courseTask();
+                const previous = frames.get(event.source);
+                frames.set(event.source, { nonce: data.nonce, kind: 'check', running: previous?.nonce === data.nonce && previous?.running, viewVisible: data.viewVisible, seenAt: Date.now() }); frameClaimAt = Date.now(); frameClaimTask = courseTask();
                 post(event.source, 'owner', { target: data.nonce });
                 if (automatic && !stopped) grant(event.source, frames.get(event.source));
             }
             if (data.type === 'start') { automatic = true; stopped = false; setTask(courseTask()); frames.set(event.source, { nonce: data.nonce }); grant(event.source, frames.get(event.source), true); }
             if (data.type === 'stop') { resumeAfterQuiet = false; pause(data.reason || '自动模式已停止。'); }
             if (data.type === 'pause') pause(data.reason || '自动模式已停止。');
-            if (data.type === 'finished' && automatic && data.task === courseTask() && !completedSenders.has(data.nonce)) {
-                completedSenders.add(data.nonce); advanceCourse(data.reason).catch(error => pause(error.message));
+            if (data.type === 'finished' && automatic && data.task === courseTask() && frames.get(event.source)?.kind === 'check' &&
+                frames.get(event.source)?.nonce === data.nonce && !completedSenders.has(data.nonce)) {
+                completedSenders.add(data.nonce); pageReviewNeeded = true; advanceCourse(data.reason).catch(error => pause(error.message));
             }
             if (data.type === 'status' && data.task === courseTask() && !completedSenders.has(data.nonce)) notify(data.value);
         } else if (!isTop && data.target === nonce && chooseCoordinator(event.source)) {
@@ -1088,6 +1325,7 @@
         isQuietHours: quietNow,
         getPlaybackRate,
         getMuted, audioBlocked,
+        videoCandidate: P ? videoCandidate : undefined,
         finishVideo,
         beforeNextChapter() {
             if (!coursePage() || completedTasks.has(courseTask())) return false;
@@ -1096,7 +1334,8 @@
             return true;
         },
         hasVideoQuiz,
-        shouldHold() { return quietNow() || hasVideoQuiz() || (coursePage() && (stopped || R?.find(pageWindow).length > 0 || expectedDocumentTask === courseTask() || F.find(document).length > 0 || expectedCheckTask === courseTask() ||
+        shouldHold() { if (coursePage() && P && videoCandidate()) return quietNow() || stopped || hasVideoQuiz() || !!stepTransition;
+            return quietNow() || hasVideoQuiz() || (coursePage() && (stopped || !!stepTransition || R?.find(pageWindow).some(entry => !topicDone.has(entry.element)) || expectedDocumentTask === courseTask() || F.find(document).length > 0 || expectedCheckTask === courseTask() ||
             (expectedVideoTask !== courseTask() && (checkStep() || (frameClaimTask === courseTask() && Date.now() - frameClaimAt < 4000))))); },
         noteVideoNavigation() {
             videoFinishProbe = null;
@@ -1110,8 +1349,11 @@
             if (hasVideoQuiz()) return true;
             if (quietNow()) return true;
             if (stopped) return true;
+            if (transitionBlocked(true)) return true;
             if (expectedCheckTask === courseTask()) return true;
             if (!coursePage() || completedTasks.has(courseTask())) return false;
+            if (nextStudyStep()) return true;
+            if (P?.steps(document).items.length) return false;
             const tab = findCheckTab();
             if (!tab) return false;
             expectedCheckTask = courseTask(); expectedVideoTask = '';

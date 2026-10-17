@@ -1,6 +1,6 @@
 # AI 服务商配置
 
-资料核对日期：2026-10-15。协议适配和账号实测是两回事：本项目使用模拟响应验证了请求/解析，不附带厂商账号，不声称所有模型均可用。服务、模型、地区和价格可能变动，优先使用你的控制台信息。
+以下地址资料核对于 2026-10-15。先在服务商控制台创建 API Key，再复制账号可用的模型 ID 和接口地址。模型、地区和价格可能变化，请以控制台当前信息为准。脚本已用模拟请求测试协议，但尚未逐一验证真实账号和所有模型，也不提供服务商账号。
 
 | 服务商 | 协议选择 | Base URL 示例 | 图片设置 |
 | --- | --- | --- | --- |
@@ -16,47 +16,55 @@
 | 硅基流动 | OpenAI Chat Completions | `https://api.siliconflow.cn/v1` | 按实际托管模型能力 |
 | 其他兼容服务 | 对应协议 | 厂商给出的基础地址 | 按模型能力 |
 
-模型 ID 一律从控制台复制。本项目不自动选择“最便宜/最强”的模型，也不向 `/models` 自动探测或替换模型。转发站和自建网关须自己确认可信性与协议。
+模型 ID 请从控制台完整复制。脚本不会请求 `/models` 获取列表，也不会自动挑选或更换模型。使用转发站或自建网关前，请确认它可信且支持所选协议。
 
 ## OpenAI
 
-Responses 是独立协议，不是把 Chat Completions 地址改名。代码发送 `input_text/input_image`，读取 output 中的 output_text，并设置 `store:false`。Chat Completions 使用 messages 和 image_url。两者都支持按配置启用 JSON 模式；推理强度只在用户选择后发送，不保证所有模型接受 `xhigh`。
+面板默认使用 Responses，也可以改选 Chat Completions。请按模型支持的协议选择；两种请求格式不能互换。
+
+Responses 使用 `input_text/input_image`，读取 output 中的 output_text，并设置 `store:false`；Chat Completions 使用 messages 和 image_url。两者都可以按设置发送 JSON 模式参数。推理强度默认不发送，手动选择前请确认模型支持，尤其是 `xhigh`。
 
 依据：[Chat API](https://developers.openai.com/api/reference/resources/chat)、[Responses API](https://developers.openai.com/api/reference/resources/responses)。
 
 ## Claude
 
-原生 `/v1/messages` 使用 `x-api-key`、`anthropic-version: 2023-06-01`，图片作为 base64 image block。浏览器直连额外声明 direct-browser-access；这是用户主动在客户端保存 Key 的模式，不是服务器替你保管密钥。SDK、服务商网关和旧版本支持范围可能不同。
+选择“Claude Messages”，填写模型 ID 和自己的 API Key。脚本使用原生 `/v1/messages`，请求头包含 `x-api-key`、`anthropic-version: 2023-06-01`，图片以 base64 image block 发送。
+
+浏览器直连还会声明 direct-browser-access。Key 保存在自己的浏览器中，项目没有代管密钥的服务器。使用网关或旧版接口时，需要另外确认支持范围。
 
 依据：[Claude Messages](https://platform.claude.com/docs/en/api/messages/create)。
 
 ## Gemini
 
-原生 `/models/{model}:generateContent` 使用 parts 中的 inline_data，API Key 通过 `x-goog-api-key` 请求头发送。可选 JSON 模式对应 responseMimeType。解析时不把 thought 段当最终答案；被拦截或没有文本时停止。
+选择“Gemini generateContent”，填写模型 ID 和 API Key。请求使用原生 `/models/{model}:generateContent`，图片放在 parts 的 inline_data 中，Key 通过 `x-goog-api-key` 请求头发送。
+
+开启 JSON 模式时会设置 responseMimeType。脚本只读取最终文本，不把 thought 段当答案；响应被拦截或没有可用文本时停止。
 
 依据：[Gemini generateContent](https://ai.google.dev/api/generate-content)。
 
 ## 国内兼容接口
 
-DeepSeek 提供 OpenAI 兼容形式；不要因为兼容就假设任意模型都支持图片、JSON 或所有推理参数。[官方快速开始](https://api-docs.deepseek.com/)。
+DeepSeek 选择 OpenAI Chat Completions。图片输入、JSON 和推理参数是否可用，仍需核对具体模型，不能只看接口兼容性。[官方快速开始](https://api-docs.deepseek.com/)。
 
-百炼支持兼容接口，但 Key、地域、业务空间、模型 ID 要匹配。上述 dashscope 兼容域名仍见官方说明；新账号优先从业务空间复制专属 Base URL，例如对应区域的 `{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`，不要把花括号示例直接粘进去。[官方配置](https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope)。
+百炼的 Key、地域、业务空间和模型 ID 需要相互匹配。表中的 dashscope 地址是兼容接口示例；新账号可优先从业务空间复制专属 Base URL。若文档给出 `{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` 一类格式，需要替换工作空间 ID，并核对区域，不能直接粘贴带花括号的示例。[官方配置](https://help.aliyun.com/zh/model-studio/compatibility-of-openai-with-dashscope)。
 
-火山方舟使用控制台提供的 Model ID/接入点，Base URL 包含 `/api/v3`，脚本再追加 `/chat/completions`。[官方兼容说明](https://docs.volcengine.com/docs/ark/compatible-with-openai-sdk?lang=zh)。
+火山方舟请填写控制台提供的 Model ID 或接入点 ID。Base URL 保留 `/api/v3`，脚本会自动追加 `/chat/completions`。[官方兼容说明](https://docs.volcengine.com/docs/ark/compatible-with-openai-sdk?lang=zh)。
 
 ## 小米 MiMo、Kimi、智谱与硅基流动
 
-四家都有独立下拉预设，不必选自定义。模型 ID 仍需要用户填写，防止把按量、订阅、区域或模型能力混在一起。
+这四家都可以在服务商下拉框直接选择。选好后仍需填写模型 ID，并核对账号套餐、接口区域及图片能力。
 
-- **小米 MiMo**：预设使用按量接口 `https://api.xiaomimimo.com/v1`；鉴权使用 `api-key`，输出上限字段使用 `max_completion_tokens`。小米也接受 Bearer，但本适配器采用其示例头。Token Plan 的 Key 与按量 Key/地址不同，不要混用；预设不代表套餐可用于任意场景。若使用另一个套餐地址，应先核对套餐允许的用途，再改 Base URL 并重新填 Key。依据：[小米官方 API 接入](https://mimo.mi.com/docs/zh-CN/quick-start/faq/api-integration)。
+- **小米 MiMo**：预设使用按量接口 `https://api.xiaomimimo.com/v1`；鉴权使用 `api-key`，输出上限字段使用 `max_completion_tokens`。小米也接受 Bearer，但脚本使用官方示例中的请求头。Token Plan 的 Key 与按量 Key/地址不同，不要混用；具体用途仍受套餐规则限制。若使用另一个套餐地址，应先核对套餐允许的用途，再改 Base URL 并重新填 Key。依据：[小米官方 API 接入](https://mimo.mi.com/docs/zh-CN/quick-start/faq/api-integration)。
 - **Kimi / Moonshot**：预设国内兼容地址；模型是否支持视觉、使用哪个区域/域名，以控制台和当前文档为准。API 文档可能重定向到新的 Kimi 平台域名，不要把文档域名当调用地址。依据：[Kimi Chat Completions](https://platform.moonshot.cn/docs/api/chat)。
 - **智谱 GLM**：预设通用 `/api/paas/v4`；普通按量 API 与 Coding 专属端点不是同一用途。Bearer Key 从自己的控制台获取。依据：[智谱快速开始](https://docs.bigmodel.cn/cn/api/introduction)。
 - **硅基流动**：预设兼容地址，模型名常包含组织/厂商前缀，应复制完整 ID。聚合平台提供模型不等于该平台的每个模型都支持图片。依据：[硅基流动 Chat Completions](https://docs.siliconflow.cn/docs/api/chat-completions-post)。
 
-其他 OpenAI 兼容服务以及本地推理服务可选“自定义”。本版没有逐家账号实测，也不硬编码未经核对的模型列表。
+其他 OpenAI 兼容服务或电脑上的推理服务，可选择“自定义”，手动填写协议和地址。模型 ID 由用户填写；项目没有固定模型列表，也尚未逐家完成账号实测。
 
 ## 费用与图文
 
-API 模式由每位用户的 Key 所属服务商计费，可能包含文字输入、截图、输出和推理用量。脚本不承诺免费，不代收费用，网页会员通常不能替代独立的 API 凭据与账单配置。具体价格以厂商实际账单为准。
+API 费用由 Key 所属服务商收取，可能包括文字输入、截图、输出和推理用量。项目不代收费用。聊天网页会员通常不包含 API 余额，请在开发者控制台单独核对计费方式。
 
-发送截图可能增加用量；关闭截图会只传 DOM 文字。遇到图片题或特殊字体乱码时纯文字暂停，要求启用截图并选视觉模型，不把图片占位文字当作完整题目。图片读取失败也不会调用模型或提交。平台反馈与之前的答案会作为最近几轮上下文，减少重复调用；完整已知答案重做时可以不调用模型。
+开启截图可能增加用量；关闭后只发送从页面读取的文字。图片题或特殊字体无法用纯文字处理时，脚本会暂停，要求启用截图并选择视觉模型。图片读取失败也会停止，不调用模型或提交。
+
+再次作答时，脚本会参考最近几轮的平台反馈和答案。如果已经掌握全部平台正确答案，重做时可以直接填写，省去模型请求。

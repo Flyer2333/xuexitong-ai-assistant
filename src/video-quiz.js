@@ -58,6 +58,8 @@
         return D.unique(matches.filter(el => !matches.some(other => other !== el && other.contains(el))));
     }
     const selected = el => el.matches('input') ? el.checked : el.getAttribute('aria-checked') === 'true';
+    const selection = entry => entry.controls.flatMap((el, index) => selected(el) ? [entry.question.options[index].key] : []);
+    const submitting = panel => [...panel.querySelectorAll('#videoquiz-submitting')].some(D.visible);
     async function apply(entry, answer, guard) {
         for (let index = 0; index < entry.controls.length; index++) {
             guard(); const el = entry.controls[index], want = answer.choices.includes(entry.question.options[index].key);
@@ -69,14 +71,14 @@
             }
         }
         guard();
-        const actual = entry.controls.flatMap((el, index) => selected(el) ? [entry.question.options[index].key] : []);
+        const actual = selection(entry);
         if (actual.sort().join('') !== [...answer.choices].sort().join('')) throw new Error('视频弹题选项未正确选中，已停止提交');
     }
     function feedback(panel, question) {
         const nodes = [...panel.querySelectorAll(feedbackSelector + ',p')]
             .filter(el => D.visible(el) && (/^(回答正确|回答错误|答对|答错|正确答案)/.test(D.text(el)) || el.matches(feedbackSelector)));
         const text = nodes.map(D.text).join(' ');
-        const wrong = nodes.some(el => el.matches('#spanNot,#spanNotBack,#spanNotBackPoint')) || /回答错误|答错|答案错误/.test(text);
+        const wrong = nodes.some(el => el.matches('#spanNot,#spanNotBack,#spanNotBackPoint') && D.text(el).trim()) || /回答错误|答错|答案错误|真遗憾|再接再厉/.test(text);
         const total = D.text(panel.querySelector('.tkTopic_numbar')).match(/共\s*(\d+)\s*题/)?.[1];
         const right = D.text(panel.querySelector('#rightNum')).trim();
         const allCorrect = Number(total) > 0 && /^\d+$/.test(right) && Number(right) === Number(total);
@@ -89,21 +91,36 @@
             if (value) choices = question.options.filter(option => value.includes('错') ? /^(错|错误)$/.test(option.text) : /^(对|正确)$/.test(option.text)).map(option => option.key);
         }
         const remaining = D.text(panel).match(/剩余\s*[:：]?\s*(\d+)\s*次/);
+        // spanNotBackPoint is also used for ordinary failures with an editable form.
+        // Its ID alone does not mean the learner must return to an earlier video point.
+        const reviewRequired = nodes.some(el => /回看|回到.*(?:知识点|视频)|重新观看|返回观看/.test(D.text(el)));
+        const options = [...panel.querySelectorAll(inputs)].filter(optionVisible);
+        const editable = options.length >= 2 && options.every(el => !el.disabled && !el.matches(':disabled') &&
+            el.getAttribute('aria-disabled') !== 'true' && el.getAttribute('aria-readonly') !== 'true' &&
+            D.enabled(D.visible(el) ? el : el.closest('label') || el.labels?.[0]));
+        const submitting = [...panel.querySelectorAll('#videoquiz-submitting')].some(D.visible);
         return { text, wrong, correct, choices,
             remaining: remaining ? Number(remaining[1]) : null,
+            reviewRequired, editable,
             retry: control(panel, /^(重试|重新作答|重新答题|再试一次)$/),
-            resubmit: wrong && !nodes.some(el => /^(spanNotBack|spanNotBackPoint)$/.test(el.id)) ? control(panel, /^(提交|确定)$/) : null,
+            resubmit: wrong && !reviewRequired && editable && !submitting ? control(panel, /^(提交|确定)$/) : null,
             proceed: correct ? control(panel, /^(继续|继续播放|继续观看|继续学习|确定)$/) : null };
     }
     function watchResponse(panel) {
-        let changed = false;
+        let changed = false, judging = submitting(panel);
         const consume = records => {
-            for (const record of records) if (record.target.closest?.(feedbackSelector) || record.target.parentElement?.closest(feedbackSelector) || [...record.addedNodes].some(node =>
-                node.nodeType === 1 && (node.matches(feedbackSelector) || node.querySelector(feedbackSelector)))) changed = true;
+            for (const record of records) {
+                if (record.target.matches?.('#videoquiz-submitting')) {
+                    if (D.visible(record.target)) judging = true;
+                    else if (judging) changed = true;
+                }
+                if (record.target.closest?.(feedbackSelector) || record.target.parentElement?.closest(feedbackSelector) || [...record.addedNodes].some(node =>
+                    node.nodeType === 1 && (node.matches(feedbackSelector) || node.querySelector(feedbackSelector)))) changed = true;
+            }
         };
         const observer = new panel.ownerDocument.defaultView.MutationObserver(consume);
         observer.observe(panel, { attributes: true, childList: true, subtree: true, characterData: true });
-        return { changed() { consume(observer.takeRecords()); return changed; }, close() { observer.disconnect(); } };
+        return { changed() { consume(observer.takeRecords()); return changed; }, started() { consume(observer.takeRecords()); return judging; }, close() { observer.disconnect(); } };
     }
-    globalThis.XxtVideoQuiz = { find, across, extract, control, apply, feedback, watchResponse };
+    globalThis.XxtVideoQuiz = { find, across, extract, control, apply, selection, submitting, feedback, watchResponse };
 })();

@@ -2,6 +2,14 @@
 (() => {
     const D = XxtCodexDom;
     const excluded = '#coursetree,.TiMu,[data-xxt-codex-panel],nav,header';
+    // Observed nested Chaoxing reader: PDF module -> #panView -> pan-yz /screen/v2/file_… .
+    function screenReader(value, base) {
+        try {
+            const url = new URL(value, base);
+            return /(^|\.)chaoxing\.com$/.test(url.hostname) &&
+                /^(?:\/mooc-ans\/screen\/file\/?|\/screen\/v2\/file_[^/]+)$/.test(url.pathname);
+        } catch { return false; }
+    }
     function fileType(value) {
         let decoded = String(value || '');
         try { decoded = decodeURIComponent(decoded); } catch {}
@@ -18,7 +26,8 @@
     }
     function viewers(doc) {
         return [...doc.querySelectorAll('iframe,embed,object')].filter(el => D.visible(el) && !el.closest(excluded) &&
-            (fileType(el.getAttribute('src') || el.getAttribute('data')) || /application\/(?:pdf|msword|vnd\.openxmlformats-officedocument\.wordprocessingml)/i.test(el.getAttribute('type') || '')));
+            (fileType(el.getAttribute('src') || el.getAttribute('data')) || screenReader(el.getAttribute('src'), doc.baseURI) ||
+                /application\/(?:pdf|msword|vnd\.openxmlformats-officedocument\.wordprocessingml)/i.test(el.getAttribute('type') || '')));
     }
     function find(doc) {
         const found = new Map();
@@ -61,22 +70,97 @@
                 (el.querySelector('iframe,embed,object,canvas,.pdfViewer') || fileType(D.text(el)) || /(?:文件|文档|文献).*预览/.test(D.text(el))))];
         return [...new Set(candidates)].filter(el => !candidates.some(parent => parent !== el && parent.contains(el)));
     }
-    function scroll(doc, progress, depth = 0) {
-        if (depth > 6) return;
-        const targets = new Set([doc.scrollingElement, ...doc.querySelectorAll('#viewerContainer,.pdfViewer,.mCustomScrollBox,.mCSB_container,[role="document"],.doc-preview')]);
+    function readerDocument(doc) {
+        return screenReader(doc.location.href) || /\/ananas\/modules\/(?:pdf|doc|document)\//i.test(doc.location.pathname);
+    }
+    function localScroll(doc, progress, scope) {
+        const root = scope || doc;
+        const targets = new Set(root.querySelectorAll('#viewerContainer,.pdfViewer,.mCustomScrollBox,[role="document"],.doc-preview'));
+        if (root.nodeType === 1) targets.add(root);
+        // Never move the course page or its catalogue scrollbar.
+        if (readerDocument(doc)) {
+            targets.add(doc.scrollingElement);
+            for (const el of doc.querySelectorAll('div,main,section')) {
+                if (el.clientHeight > 100 && /auto|scroll/.test(doc.defaultView.getComputedStyle(el).overflowY)) targets.add(el);
+            }
+        }
+        let count = 0, bottom = true, extent = 0;
         for (const el of targets) {
-            if (!el || !D.visible(el) || el.scrollHeight <= el.clientHeight) continue;
-            el.scrollTop = Math.max(0, el.scrollHeight - el.clientHeight) * Math.max(0, Math.min(1, progress));
+            if (!el || !D.visible(el) || el.clientHeight < 1 ||
+                (el.scrollHeight <= el.clientHeight + 2 && el !== doc.scrollingElement) || el.closest(excluded)) continue;
+            el.scrollTop = Math.max(0, el.scrollHeight - el.clientHeight) * progress;
+            count++; extent += el.scrollHeight;
+            bottom = bottom && el.scrollHeight - el.clientHeight - el.scrollTop <= 2;
         }
-        for (const frame of viewers(doc)) {
-            if (frame.tagName !== 'IFRAME') continue;
-            try { if (frame.contentDocument) scroll(frame.contentDocument, progress, depth + 1); } catch {}
+        return { count, bottom, extent, unavailable: 0 };
+    }
+    const scrollRequests = new Map();
+    const scrollChannel = 'xxt-codex-document-scroll-1';
+    function trustedOrigin(origin) {
+        try { return /(^|\.)chaoxing\.com$/.test(new URL(origin).hostname); } catch { return false; }
+    }
+    function readerAncestor(source) {
+        let parent = window;
+        for (let depth = 0; depth < 6 && parent !== parent.parent; depth++) {
+            parent = parent.parent;
+            if (parent === source) return true;
         }
+        return false;
+    }
+    window.addEventListener('message', event => {
+        const data = event.data;
+        if (!trustedOrigin(event.origin) || data?.source !== scrollChannel) return;
+        if (data.type === 'result') {
+            const pending = scrollRequests.get(data.id);
+            if (pending && pending.source === event.source && typeof data.bottom === 'boolean' &&
+                Number.isSafeInteger(data.count) && data.count >= 0 && Number.isFinite(data.extent)) {
+                pending.resolve({ count: data.count, bottom: data.bottom, extent: data.extent, unavailable: data.unavailable ? 1 : 0 });
+            }
+        } else if (data.type === 'scroll' && readerAncestor(event.source) &&
+            screenReader(location.href) && typeof data.id === 'string' && Number.isFinite(data.progress) && data.progress >= 0 && data.progress <= 1) {
+            const rest = typeof GM_getValue === 'function' && GM_getValue('xxt-quiet-enabled', true) && XxtCodexCore.quietHoursAt();
+            if (rest || document.visibilityState === 'hidden') return;
+            const result = localScroll(document, data.progress);
+            event.source.postMessage({ source: scrollChannel, type: 'result', id: data.id, ...result }, event.origin);
+        }
+    });
+    function crossScroll(frame, progress) {
+        const id = crypto.randomUUID();
+        return new Promise(resolve => {
+            const finish = result => { clearTimeout(timer); scrollRequests.delete(id); resolve(result); };
+            const timer = setTimeout(() => finish({ count: 0, bottom: false, extent: 0, unavailable: 1 }), 1200);
+            scrollRequests.set(id, { source: frame.contentWindow, resolve: finish });
+            // Only a visible, recognized document iframe is addressed, never arbitrary site frames.
+            frame.contentWindow.postMessage({ source: scrollChannel, type: 'scroll', id, progress }, '*');
+        });
+    }
+    async function scroll(doc, progress, scope, assertCurrent = () => {}, depth = 0) {
+        assertCurrent();
+        if (depth > 6) return { count: 0, bottom: false, extent: 0, unavailable: 1 };
+        progress = Math.max(0, Math.min(1, progress));
+        const result = localScroll(doc, progress, scope);
+        const children = viewers(doc).filter(frame => frame.tagName === 'IFRAME' && (!scope || scope === frame || scope.contains(frame)));
+        if (readerDocument(doc)) {
+            // A short wrapper is not proof that an unknown embedded document reached its end.
+            for (const frame of doc.querySelectorAll('iframe')) {
+                if (D.visible(frame) && !children.includes(frame) && (!scope || scope === frame || scope.contains(frame))) result.unavailable++;
+            }
+        }
+        for (const frame of children) {
+            assertCurrent();
+            let child;
+            try { child = frame.contentDocument; } catch {}
+            const next = child ? await scroll(child, progress, undefined, assertCurrent, depth + 1) : await crossScroll(frame, progress);
+            assertCurrent();
+            result.count += next.count; result.extent += next.extent;
+            result.bottom = result.bottom && next.bottom; result.unavailable += next.unavailable;
+        }
+        return result;
     }
     async function open(entry, win, assertCurrent) {
         if (entry.inline) {
             const close = closeButton(entry.element);
-            return { inline: true, close: () => { if (close && D.enabled(close)) close.click(); } };
+            return { inline: true, root: entry.element, close: () => { if (close && D.enabled(close)) close.click(); } };
         }
         const doc = entry.element.ownerDocument;
         const before = new Set(openedViews(doc));
@@ -113,7 +197,7 @@
                 const added = openedViews(doc).filter(viewer => !before.has(viewer));
                 if (added.length === 1) {
                     const close = closeButton(added[0]);
-                    return { inline: !close, closed: close ? () => !D.visible(added[0]) : undefined,
+                    return { inline: !close, root: added[0], closed: close ? () => !D.visible(added[0]) : undefined,
                         close: () => { if (close && D.enabled(close)) close.click(); } };
                 }
                 if (added.length > 1 || popups.length > 1) throw new Error('出现多个文件预览，已暂停，请核对打开的文件');

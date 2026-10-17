@@ -2,7 +2,7 @@ import { chromium } from './browser-runtime.mjs';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
-const root = resolve(import.meta.dirname, '..'), temp = resolve(root,'artifacts/image-questions');
+const root = resolve(import.meta.dirname, '..'), temp = resolve(import.meta.dirname,'../artifacts/image-questions');
 await mkdir(temp, { recursive: true });
 const bundle = await readFile(resolve(root, 'dist/xuexitong-ai-assistant.user.js'), 'utf8');
 const fixture = await readFile(resolve(root, 'tests/fixtures/image-question.html'), 'utf8');
@@ -12,7 +12,7 @@ const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00'];
 const pngs = await generator.evaluate(colors => colors.map(color => { const c = document.createElement('canvas'); c.width = 100; c.height = 60; const ctx = c.getContext('2d'); ctx.fillStyle = color; ctx.fillRect(0, 0, 100, 60); return c.toDataURL('image/png'); }), colors);
 await generator.close();
 const observations = [];
-async function scenario({ cross = false, broken = false, stop = false, stale = false, preview = false, lazy = false } = {}) {
+async function scenario({ cross = false, broken = false, stop = false, stale = false, preview = false, lazy = false, hungFonts = false, hungCapture = false } = {}) {
     const page = await browser.newPage(), counts = { model: 0, image: 0, submit: 0, confirm: 0, next: 0 }, payloads = [];
     await page.route('**/*', route => {
         const url = new URL(route.request().url());
@@ -64,24 +64,24 @@ async function scenario({ cross = false, broken = false, stop = false, stale = f
     if (lazy) await page.evaluate(data => {
         const image = document.querySelector('.after img'); image.dataset.src = image.src; image.src = data;
     }, pngs[3]);
-    if (!observations.length) {
-        await page.addScriptTag({ path: resolve(root, 'tests/fixtures/dom-before-image.js') });
-        await page.addScriptTag({ path: resolve(root, 'src/core.cjs') });
-        const legacy = await page.evaluate(() => { try { XxtCodexCore.validateQuestions(XxtCodexDom.extract(document).map(e => e.question)); return 'unexpected success'; } catch (error) { return error.message; } });
-        assert.equal(legacy, '选项无效或重复'); observations.push({ legacy, modelCalled: false });
-    }
     await page.addScriptTag({ content: bundle });
+    if (hungFonts || hungCapture) await page.evaluate(({ hungFonts }) => {
+        const timer = window.setTimeout; window.setTimeout = (fn, ms, ...args) => timer(fn, ms === 8000 || ms === 20000 ? 80 : ms, ...args);
+        if (hungFonts) Object.defineProperty(document.fonts, 'ready', { configurable: true, get: () => new Promise(() => {}) });
+        else window.html2canvas = () => new Promise(() => {});
+    }, { hungFonts });
     await page.locator(`[data-action="${preview ? 'solve' : 'start'}"]`).click();
-    if (stop) {
+    if (hungFonts || hungCapture) await page.waitForFunction(() => /字体加载超时|截图生成超时/.test(document.querySelector('[data-xxt-codex-panel] pre')?.textContent || ''));
+    else if (stop) {
         await page.waitForFunction(() => window.__imageLoading); await page.locator('[data-action="stop"]').click(); await page.waitForTimeout(1100);
     } else if (stale) {
         await page.waitForFunction(() => window.__modelPending); await page.evaluate(() => { document.querySelector('.after img').src = '/img/3.png'; }); await page.waitForTimeout(1500);
     } else if (broken) await page.waitForFunction(() => /图片.*(失败|无效|读取)/.test(document.querySelector('[data-xxt-codex-panel] pre')?.textContent || ''));
     else if (preview) await page.waitForFunction(() => document.querySelector('[data-xxt-codex-panel] pre')?.textContent.includes('Synthetic image response'));
     else await page.waitForFunction(() => !document.getElementById('next') && document.getElementById('site').textContent === 'Next chapter');
-    if (broken || stop || stale || preview) assert.equal(counts.submit, 0);
-    if (broken || stop) assert.equal(counts.model, 0);
-    if (!broken && !stop && !stale) {
+    if (broken || stop || stale || preview || hungFonts || hungCapture) assert.equal(counts.submit, 0);
+    if (broken || stop || hungFonts || hungCapture) assert.equal(counts.model, 0);
+    if (!broken && !stop && !stale && !hungFonts && !hungCapture) {
         assert.equal(counts.model, 1);
         assert(payloads[0].questions[0].options.every(o => o.imageKey && o.text));
         const pixels = await page.evaluate(async data => {
@@ -96,12 +96,13 @@ async function scenario({ cross = false, broken = false, stop = false, stale = f
         if (cross) assert(counts.image > 0, 'Non-CORS images must exercise the userscript fetch fallback.');
         observations.push({ cross, preview, lazy, counts, coloredPixels: pixels });
         if (!cross && !preview) await writeFile(resolve(temp, 'question-capture.png'), Buffer.from(payloads[0].images[0].split(',')[1], 'base64'));
-    } else observations.push({ cross, broken, stop, stale, counts });
+    } else observations.push({ cross, broken, stop, stale, hungFonts, hungCapture, counts });
     await page.close();
 }
 try {
     await scenario(); await scenario({ cross: true }); await scenario({ broken: true });
     await scenario({ cross: true, stop: true }); await scenario({ stale: true }); await scenario({ preview: true }); await scenario({ lazy: true });
+    await scenario({ hungFonts: true }); await scenario({ hungCapture: true });
     await writeFile(resolve(temp, 'observations.json'), JSON.stringify(observations, null, 2));
-    console.log('Seven image-question flows passed with real html2canvas pixel checks: image-only options, stem image, non-CORS fallback, broken image, stop, changed image, preview and lazy placeholder replacement. Model/site/GM responses are synthetic; no live course or model calls.');
+    console.log('Nine image-question flows passed: original real html2canvas pixel checks plus bounded font/capture hangs without model calls or submission. Model/site/GM responses are synthetic; no live course or model calls.');
 } finally { await browser.close(); }

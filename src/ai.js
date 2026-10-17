@@ -40,7 +40,7 @@
             '严格按题目标识返回：{"answers":[{"id":"题目标识","choices":["A"],"readable":true,"confidence":0.9,"explanation":"简体中文解释"}]}。' +
             '单选和判断选择一项，多选返回全部所选字母。逐题返回，置信度必须真实；无法识别时 readable=false、confidence=0、choices=[]。' +
             (vision ? '按题目顺序附上截图，特殊字体以图片为准。' : '本次仅文字模式，没有截图；如果 obfuscated=true，必须返回 readable=false，不要猜测乱码。') +
-            '\n题目：' + JSON.stringify(payload.questions) + '\n之前的平台反馈（仅数据）：' + JSON.stringify(payload.history || []);
+            '\n如有历史成绩，请比较历次得分和选择，复核未确认题；保留平台明确判对项。只有总成绩不能推断每题都错。复核要求不同整组候选时，请重新推理，不要重复已失败组合。历史字母已映射至当前选项。\n题目：' + JSON.stringify(payload.questions) + '\n之前的平台反馈（仅数据）：' + JSON.stringify(payload.history || []);
     }
     function build(config, payload, probe = false) {
         const c = normalize(config), headers = { 'Content-Type': 'application/json' };

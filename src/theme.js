@@ -32,6 +32,10 @@
 [data-xxt-codex-panel] .ai-form small{color:#64748b;font-size:11px;line-height:1.6}
 [data-xxt-codex-panel] .ai-buttons{display:flex;gap:8px}
 [data-xxt-codex-panel] .ai-buttons button{border:1px solid #c7d2fe;background:#eef2ff;color:#4338ca;border-radius:8px;padding:8px 12px}
+[data-xxt-codex-panel] .xxt-feedback{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;color:#64748b;font-size:11px;line-height:1.7}
+[data-xxt-codex-panel] .xxt-feedback-links{display:flex;gap:14px;margin-bottom:4px}
+[data-xxt-codex-panel] .xxt-feedback a{color:#4f46e5;text-decoration:none;font-weight:600}
+[data-xxt-codex-panel] .xxt-feedback a:hover{text-decoration:underline}
 [data-xxt-codex-panel] [hidden]{display:none!important}
 `;
     function aiSettings(onChange) {
@@ -74,23 +78,35 @@
         clear.onclick = () => { onChange(); GM_setValue('xxt-ai-config',{ ...A.load(),key:'' }); populate(); message.textContent = '已清除当前密钥。'; };
         controls.append(save,clear); form.append(note,controls,message); section.append(heading,form); populate(); return section;
     }
-    function decorate(panel, { title, actions, output, details, onQuietChange, playbackRate, onRateChange, onAiChange }) {
+    function decorate(panel, { title, actions, output, details, onQuietChange, playbackRate, onRateChange, onAiChange, muted, onMutedChange }) {
         const style = document.createElement('style'); style.textContent = css; document.head.append(style);
         panel.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:2147483647;width:min(360px,calc(100vw - 36px));text-align:left';
         const make = (tag,cls) => { const el = document.createElement(tag); el.className = cls; return el; };
         const shell = make('div','xxt-shell'), header = make('header','xxt-head'), name = document.createElement('div');
-        const version = make('div','xxt-version'); version.textContent = 'LEARNING ASSISTANT · 1.0.1'; name.append(title,version);
+        const version = make('div','xxt-version'); version.textContent = 'LEARNING ASSISTANT · 1.0.4'; name.append(title,version);
         const body = make('div','xxt-body'), fold = make('button','xxt-fold'); fold.textContent = '−'; fold.title = '收起面板';
         fold.onclick = () => { body.hidden = !body.hidden; fold.textContent = body.hidden ? '+' : '−'; fold.title = body.hidden ? '展开面板' : '收起面板'; };
         const status = make('div','xxt-state'); status.textContent = '学习流程 · 多模型接入';
         const settings = make('div','xxt-settings'), rateLabel = make('label','xxt-rate-setting'), rate = document.createElement('select'); rate.dataset.setting = 'playback-rate'; rate.setAttribute('aria-label','视频倍速');
         for (const value of XxtCodexCore.playbackRates) { const option = document.createElement('option'); option.value = value; option.textContent = value === 1 ? '1×（建议）' : `${value}×`; rate.append(option); }
         rate.value = playbackRate; rate.onchange = () => onRateChange(Number(rate.value)); rateLabel.append(document.createTextNode('视频倍速'),rate);
+        const mutedInput = document.createElement('input'); mutedInput.type = 'checkbox'; mutedInput.dataset.setting = 'muted'; mutedInput.checked = muted;
+        mutedInput.onchange = () => onMutedChange(mutedInput.checked);
+        const mutedLabel = document.createElement('label'); mutedLabel.append(mutedInput,document.createTextNode('静音播放'));
         const quiet = document.createElement('input'); quiet.type = 'checkbox'; quiet.dataset.setting = 'quiet'; quiet.checked = GM_getValue('xxt-quiet-enabled',true);
         quiet.onchange = () => { GM_setValue('xxt-quiet-enabled',quiet.checked); onQuietChange(); };
         const quietLabel = document.createElement('label'); quietLabel.append(quiet,document.createTextNode('23:00—07:00 休息'));
-        const duration = document.createElement('span'); duration.textContent = '文献停留 60 秒'; settings.append(rateLabel,duration,quietLabel);
-        actions.className = 'xxt-actions'; body.append(actions,status,output,aiSettings(onAiChange),settings,details); header.append(name,fold); shell.append(header,body); panel.replaceChildren(shell);
+        const duration = document.createElement('span'); duration.textContent = '文档 60 秒 · 专题每项 90 秒'; settings.append(rateLabel,mutedLabel,duration,quietLabel);
+        const feedback = make('footer','xxt-feedback'), feedbackLinks = make('div','xxt-feedback-links');
+        for (const [label,template] of [['Bug / 问题反馈','bug_report.yml'],['功能建议','feature_request.yml']]) {
+            const link = document.createElement('a'); link.textContent = label;
+            link.href = `https://github.com/Flyer2333/xuexitong-ai-assistant/issues/new?template=${template}`;
+            link.target = '_blank'; link.rel = 'noopener noreferrer'; feedbackLinks.append(link);
+        }
+        const feedbackNote = document.createElement('div'); feedbackNote.textContent = '遇到 Bug 或有新功能想法？欢迎提交，作者会及时排查修复、评估并持续完善功能。';
+        const privacyNote = document.createElement('div'); privacyNote.textContent = '提交前请遮挡 API Key、连接码及个人信息。不会自动上传页面或日志。';
+        feedback.append(feedbackLinks,feedbackNote,privacyNote);
+        actions.className = 'xxt-actions'; body.append(actions,status,output,aiSettings(onAiChange),settings,details,feedback); header.append(name,fold); shell.append(header,body); panel.replaceChildren(shell);
         let drag;
         header.onpointerdown = event => { if (event.button !== 0 || event.target.closest('button')) return; const r = panel.getBoundingClientRect(); drag = {x:event.clientX-r.left,y:event.clientY-r.top}; header.setPointerCapture(event.pointerId); event.preventDefault(); };
         header.onpointermove = event => { if (!drag) return; const r = panel.getBoundingClientRect(); panel.style.left = `${Math.max(8,Math.min(innerWidth-r.width-8,event.clientX-drag.x))}px`; panel.style.top = `${Math.max(8,Math.min(innerHeight-60,event.clientY-drag.y))}px`; panel.style.right = 'auto'; panel.style.bottom = 'auto'; };

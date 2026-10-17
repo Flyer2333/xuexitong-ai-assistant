@@ -1,0 +1,41 @@
+<!-- Structure follows the public ans.videojs.VideoQuiz renderTpl and videojs-test-ans.css;
+     question text, option descriptions, data-popup and inline display states are test data. -->
+<style>
+.ans-videoquiz { text-align:left; position:relative; height:470px; width:820px; }
+.tkTopic { position:absolute; inset:0; background:#151515; color:white; }
+.tkTopic_title { position:absolute; left:0; top:0; right:0; padding:18px; }
+.tkTopic_numbar { position:absolute; right:18px; top:18px; }
+.tkTopic_con { position:absolute; left:2px; top:50px; right:2px; bottom:76px; overflow:auto; }
+.tkItem { padding:0 50px; } .tkItem_title { padding:10px; }
+.tkItem_ul { padding:0; } .tkItem_ul li { list-style:none; position:relative; }
+.tkItem_ul li label { display:block; padding:10px 10px 10px 48px; min-height:22px; }
+.tkRadio { width:18px; height:18px; overflow:hidden; position:absolute; left:10px; top:12px; display:inline-block; }
+.tkRadio input { width:18px; height:18px; opacity:0; cursor:pointer; display:block; position:absolute; left:0; top:0; z-index:2; }
+.tkRadio i { width:18px; height:18px; display:block; background:white; }
+.tkRadio input:checked+i { background:#2999e8; }
+.tkTopic_oper { position:absolute; left:0; right:0; bottom:10px; padding:10px 20px; height:40px; }
+.tkTopic_oper a { cursor:pointer; margin:12px; }
+</style>
+<div class="x-component ans-videoquiz" data-popup>
+  <div class="tkTopic">
+    <div class="tkTopic_numbar">共 1 题<span id="rightAnswerNum">，已答对 <i id="rightNum">0</i> 题</span></div>
+    <div class="tkTopic_title">多选题</div>
+    <div class="tkTopic_con tkScroll"><div class="tkItem">
+      <div class="tkItem_title">以下测试选项中，说法正确的有哪些？</div>
+      <ul class="tkItem_ul">
+        <li class="ans-videoquiz-opt"><label><span class="tkRadio"><input type="checkbox" name="ans-videoquiz-opt"><i></i></span>A、选项一</label></li>
+        <li class="ans-videoquiz-opt"><label><span class="tkRadio"><input type="checkbox" name="ans-videoquiz-opt"><i></i></span>B、选项二</label></li>
+        <li class="ans-videoquiz-opt"><label><span class="tkRadio"><input type="checkbox" name="ans-videoquiz-opt"><i></i></span>C、选项三</label></li>
+        <li class="ans-videoquiz-opt"><label><span class="tkRadio"><input type="checkbox" name="ans-videoquiz-opt"><i></i></span>D、选项四</label></li>
+      </ul>
+    </div></div>
+    <div class="tkTopic_oper">
+      <a class="ans-videoquiz-submit bntLinear fr" id="videoquiz-submit">提交</a>
+      <a class="ans-videoquiz-submit bntLinear fr" id="videoquiz-submitting" style="display:none">提交中</a>
+      <a class="ans-videoquiz-continue bntLinear fr" id="videoquiz-continue" style="display:none">继续学习</a>
+      <span class="rightInfo" id="spanHas" style="display:none">回答正确</span>
+      <span class="spanNot fr" id="spanNot" style="display:none">回答错误</span>
+      <span class="spanNotBack fr" id="spanNotBack" style="display:none">回答错误，请回看</span>
+    </div>
+  </div>
+</div>

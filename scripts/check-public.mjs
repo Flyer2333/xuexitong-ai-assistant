@@ -16,7 +16,7 @@ for(const path of paths){
  if(/\.(js|cjs|mjs)$/.test(name))execFileSync(process.execPath,['--check',path],{stdio:'inherit'});
 }
 const script=readFileSync(resolve(root,'dist/xuexitong-ai-assistant.user.js'),'utf8');
-for(const name of ['core.cjs','dom.js','capture.js','documents.js','interruptions.js','video-quiz.js','ai.js','theme.js','workflow.js','player.js'])assert(script.includes(readFileSync(resolve(root,'src',name),'utf8')),`Stale build: ${name}`);
+for(const name of ['core.cjs','retry.cjs','dom.js','capture.js','documents.js','reading.js','interruptions.js','video-quiz.js','ai.js','theme.js','workflow.js','player.js'])assert(script.includes(readFileSync(resolve(root,'src',name),'utf8')),`Stale build: ${name}`);
 const {version}=JSON.parse(readFileSync(resolve(root,'package.json'),'utf8'));
 assert(script.includes(`@version      ${version}`));assert(script.includes('@connect      *'));
 console.log(`Public build checked: ${paths.length} files, source sync and JavaScript syntax; no known personal paths, embedded mascot or paired credentials.`);

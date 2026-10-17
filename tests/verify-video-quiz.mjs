@@ -10,7 +10,7 @@ wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8
 wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(16000, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(wav.length - 44, 40);
 const media = `data:audio/wav;base64,${wav.toString('base64')}`;
 const observations = [];
-async function scenario({ child = false, cross = false, type = 'multiple', retry = false, sequential = false, stopped = false, stale = false, generic = false, spinner = false } = {}) {
+async function scenario({ child = false, cross = false, type = 'multiple', retry = false, sequential = false, stopped = false, stale = false, generic = false, spinner = false, delayedCheck = false, noCheck = false } = {}) {
     const page = await browser.newPage();
     const counts = { model: 0, submit: 0, retry: 0, proceed: 0, check: 0, next: 0 };
     await page.exposeFunction('__record', name => { counts[name]++; });
@@ -23,7 +23,8 @@ async function scenario({ child = false, cross = false, type = 'multiple', retry
     const init = () => {
         window.unsafeWindow = window;
         window.__gm = { 'xxt-codex-token': 'b'.repeat(64), 'xxt-quiet-enabled': false };
-        window.__gm['xxt-ai-config'] = {provider:'codex',protocol:'codex',baseUrl:'http://127.0.0.1:18763',key:'b'.repeat(64),vision:true}; window.GM_getValue = (key, fallback) => window.__gm[key] ?? fallback;
+        window.__gm['xxt-ai-config'] = {provider:'codex',protocol:'codex',baseUrl:'http://127.0.0.1:18763',key:'b'.repeat(64),vision:true};
+        window.GM_getValue = (key, fallback) => window.__gm[key] ?? fallback;
         window.GM_setValue = (key, value) => { window.__gm[key] = structuredClone(value); };
         window.GM_xmlhttpRequest = config => {
             if (config.method === 'POST') window.__record('model');
@@ -42,6 +43,12 @@ async function scenario({ child = false, cross = false, type = 'multiple', retry
             document.querySelector('.posCatalog_active').classList.remove('posCatalog_active'); document.querySelectorAll('.posCatalog_select')[1].classList.add('posCatalog_active');
         };
     });
+    if (delayedCheck || noCheck) await owner.evaluate(({ noCheck }) => {
+        const button = document.getElementById('check'); button.style.display = 'none';
+        window.addEventListener('message', event => {
+            if (event.data?.testVideoEnded && !noCheck) setTimeout(() => { button.style.display = ''; }, 2000);
+        });
+    }, { noCheck });
     await reader.evaluate(({ media, type, retry, sequential, generic, spinner }) => {
         const video = document.querySelector('video'); video.src = media; video.load();
         window.__wrongFirst = retry; window.__stage = 0; window.__submits = 0;
@@ -80,6 +87,7 @@ async function scenario({ child = false, cross = false, type = 'multiple', retry
     await owner.addScriptTag({ content: bundle }); if (child) await reader.addScriptTag({ content: bundle });
     for (const frame of child ? [owner, reader] : [owner]) await frame.evaluate(() => { window.html2canvas = async () => ({ toDataURL: () => 'data:image/png;base64,iVBORw0KGgo=' }); });
     await reader.evaluate(() => window.__showQuestion());
+    if (delayedCheck || noCheck) await reader.evaluate(() => { document.querySelector('video').addEventListener('ended', () => window.top.postMessage({ testVideoEnded: true }, '*')); });
     await owner.locator('[data-action="start"]').click();
     await page.waitForFunction(() => true);
     await reader.waitForFunction(() => !!window.__gm && document.querySelector('video').paused);
@@ -101,10 +109,12 @@ async function scenario({ child = false, cross = false, type = 'multiple', retry
         assert.equal(counts.model, sequential ? 2 : 1, 'Platform reference answers avoid a second model request on retry.');
         assert.equal(counts.proceed, sequential ? 2 : 1, 'Continue is clicked only once per popup, including delayed closure.');
         await reader.evaluate(() => { const video = document.querySelector('video'); video.currentTime = video.duration - 0.05; });
-        await owner.waitForFunction(() => window.__check === 1, null, { timeout: 6500 });
+        await owner.waitForFunction(noCheck => noCheck ? window.__next === 1 : window.__check === 1, noCheck, { timeout: 8500 });
+        assert.equal(counts.check, noCheck ? 0 : 1);
+        assert.equal(counts.next, noCheck ? 1 : 0, 'A possible chapter check must be entered before any next chapter navigation.');
         await owner.locator('[data-action="stop"]').click();
     }
-    observations.push({ child, cross, type, retry, sequential, stopped, stale, generic, spinner, counts }); await page.close();
+    observations.push({ child, cross, type, retry, sequential, stopped, stale, generic, spinner, delayedCheck, noCheck, counts }); await page.close();
 }
 try {
     if (process.argv.includes('--targeted')) {
@@ -118,7 +128,8 @@ try {
     await scenario({ stopped: true }); await scenario({ stale: true });
     await scenario({ child: true, cross: true, stopped: true }); await scenario({ child: true, cross: true, stale: true });
     await scenario({ generic: true });
+    await scenario({ delayedCheck: true }); await scenario({ child: true, cross: true, delayedCheck: true }); await scenario({ noCheck: true });
     await writeFile(resolve(temp, 'observations.json'), JSON.stringify(observations, null, 2));
-    console.log('12 video popup scenarios passed: native media resumes before chapter check; single/multiple/boolean, same/cross-origin frames, reference-answer retry, sequential popups, stop and stale navigation, generic popup class. Synthetic site/model only.');
+    console.log('15 video popup scenarios passed: answer then resume; video end probes current chapter check including delayed local/cross-origin tabs and absent check, before next chapter. Original stop/stale/reference-answer/sequence cases preserved. Synthetic site/model only.');
     }
 } finally { await browser.close(); }

@@ -91,6 +91,7 @@
                 this.play();
             },
             nextUnit() {
+                if (globalThis.XxtCodexControl?.beforeNextChapter?.()) return;
                 if (globalThis.XxtCodexControl?.hasVideoQuiz?.()) return;
                 if (globalThis.XxtCodexControl?.isQuietHours?.()) return;
                 if (this._nextUnitPending) {
@@ -153,10 +154,12 @@
 
                 const video = this._getVideoEl();
                 if (!video || !this._isPlaying) return;
+                if (globalThis.XxtCodexControl?.getMuted) video.muted = globalThis.XxtCodexControl.getMuted();
 
                 console.log(`%c触发视频保活恢复(${reason})`, "color:#607D8B");
                 video.play().catch((e) => {
                     console.warn("直接恢复播放失败，尝试静音恢复:", e);
+                    if (globalThis.XxtCodexControl?.getMuted?.() === false) { globalThis.XxtCodexControl.audioBlocked(); return; }
                     video.muted = true;
                     video.play().catch((err) => {
                         console.error("静音恢复播放失败:", err);
@@ -195,7 +198,7 @@
                     if (video.ended && this._isPlaying) {
                         console.log("%c检测到视频结束，准备切换下一个...", "color:#9C27B0");
                         this._isPlaying = false;
-                        setTimeout(() => this._continueAfterVideo(), 1000);
+                        setTimeout(() => { if (this._videoEl === video && this._isLiveVideo(video) && video.ended) this._continueAfterVideo(); }, 1000);
                     }
                 } catch (e) {
                     console.error("视频状态检查失败:", e);
@@ -252,6 +255,7 @@
                     this._videoEventHandle();
                     this.configs.playbackRate = globalThis.XxtCodexControl?.getPlaybackRate?.() ?? this.configs.playbackRate;
                     el.playbackRate = this.configs.playbackRate;
+                    if (globalThis.XxtCodexControl?.getMuted) el.muted = globalThis.XxtCodexControl.getMuted();
 
                     try {
                         await el.play();
@@ -371,6 +375,7 @@
                 if (globalThis.XxtCodexControl?.hasVideoQuiz?.()) return;
                 if (globalThis.XxtCodexControl?.isQuietHours?.()) return;
                 console.error("播放错误详情:", error);
+                if (globalThis.XxtCodexControl?.getMuted?.() === false) { globalThis.XxtCodexControl.audioBlocked(); this._isPlaying = false; return; }
                 const video = this._getVideoEl();
                 if (video) {
                     video.muted = true;
@@ -549,9 +554,11 @@
                 this._isPlaying = false;
                 this._lastEndedVideo = this._videoEl;
                 this._clearCheckInterval();
-                setTimeout(() => this._continueAfterVideo(), 1000);
+                const endedVideo = this._videoEl;
+                setTimeout(() => { if (this._videoEl === endedVideo && this._isLiveVideo(endedVideo) && endedVideo.ended) this._continueAfterVideo(); }, 1000);
             },
             _continueAfterVideo() {
+                if (globalThis.XxtCodexControl?.finishVideo?.()) return;
                 if (globalThis.XxtCodexControl?.enterCheckStep()) return;
                 this.nextUnit();
             },

@@ -24,7 +24,7 @@ async function setup({ cross = false, saved, night = false } = {}) {
         window.__gm = JSON.parse(sessionStorage.getItem('test-speed-values') || '{}');
         if (saved !== undefined) window.__gm['xxt-playback-rate'] = saved;
         window.__gm['xxt-quiet-enabled'] = night;
-        window.__gm['xxt-ai-config'] = {provider:'codex',protocol:'codex',baseUrl:'http://127.0.0.1:18763',key:'b'.repeat(64),vision:true}; window.GM_getValue = (key, fallback) => window.__gm[key] ?? fallback;
+        window.GM_getValue = (key, fallback) => window.__gm[key] ?? fallback;
         window.GM_setValue = (key, value) => { window.__gm[key] = structuredClone(value); sessionStorage.setItem('test-speed-values', JSON.stringify(window.__gm)); };
         window.GM_xmlhttpRequest = () => { throw new Error('No model calls are expected in a playback setting test.'); };
     };
@@ -52,34 +52,47 @@ try {
     for (const cross of [false, true]) {
         let { page, reader, configure, init } = await setup({ cross });
         const select = page.locator('[data-setting="playback-rate"]');
+        const muted = page.locator('[data-setting="muted"]');
+        assert.equal(await muted.isChecked(), true);
         assert.equal(await select.inputValue(), '1');
         assert.equal(await select.locator('option[value="1"]').textContent(), '1×（建议）');
         assert.deepEqual(await select.locator('option').evaluateAll(options => options.map(option => option.value)), ['1', '1.25', '1.5', '1.75', '2']);
         await page.locator('[data-action="start"]').click(); await playing(reader, 1);
+        assert.equal(await reader.evaluate(() => document.querySelector('video').muted), true);
+        await muted.uncheck(); await reader.waitForFunction(() => !document.querySelector('video').muted);
+        await muted.check(); await reader.waitForFunction(() => document.querySelector('video').muted);
         await select.selectOption('1.5'); await playing(reader, 1.5);
         if (!cross) {
             const rect = await page.locator('[data-xxt-codex-panel]').boundingBox();
-            await page.screenshot({ path: resolve(temp, 'speed-preview.png') });
+            await page.screenshot({ path: resolve(temp, 'speed-preview.png'), clip: { x: rect.x - 16, y: rect.y - 106, width: rect.width + 32, height: rect.height + 122 } });
         }
         await select.selectOption('2'); await playing(reader, 2);
+        await muted.uncheck();
         await page.locator('#next').click();
         if (cross) {
             await page.waitForTimeout(300); reader = page.frames().find(frame => frame.url().includes('/video/second'));
             await reader.evaluate(init, { night: false, reset: true }); await reader.addScriptTag({ content: bundle });
         }
         await playing(reader, 2);
+        assert.equal(await reader.evaluate(() => document.querySelector('video').muted), false, 'New chapter inherits unmuted preference.');
         await page.locator('[data-action="stop"]').click();
         await reader.waitForFunction(() => document.querySelector('video').paused);
+        await muted.check();
         await select.selectOption('1.25'); await page.waitForTimeout(200);
         assert.equal(await reader.evaluate(() => document.querySelector('video').paused), true, 'Changing a setting must not start a stopped video.');
         assert.equal(await reader.evaluate(() => document.querySelector('video').playbackRate), 2, 'Stopped media is left untouched until restart.');
+        assert.equal(await reader.evaluate(() => document.querySelector('video').muted), false, 'Muted preference is saved while stopped without starting or changing stopped media.');
         await page.locator('[data-action="start"]').click(); await playing(reader, 1.25);
+        assert.equal(await reader.evaluate(() => document.querySelector('video').muted), true);
+        await muted.uncheck();
         await page.locator('[data-action="stop"]').click();
         await page.reload(); reader = await configure(false);
         assert.equal(await page.locator('[data-setting="playback-rate"]').inputValue(), '1.25', 'Selection survives refresh.');
+        assert.equal(await page.locator('[data-setting="muted"]').isChecked(), false, 'Unmuted preference survives refresh.');
         await page.locator('[data-action="start"]').click(); await playing(reader, 1.25);
+        assert.equal(await reader.evaluate(() => document.querySelector('video').muted), false);
         await page.locator('[data-action="stop"]').click();
-        observations.push({ cross, default: 1, rates: [1.5, 2, 1.25], navigation: true, stoppedGuard: true, refresh: true }); await page.close();
+        observations.push({ cross, default: 1, rates: [1.5, 2, 1.25], navigation: true, stoppedGuard: true, refresh: true, muted: 'default on; live toggle, navigation, stop and refresh verified' }); await page.close();
     }
     let { page } = await setup({ saved: 'invalid' });
     assert.equal(await page.locator('[data-setting="playback-rate"]').inputValue(), '1');
@@ -89,6 +102,9 @@ try {
     await page.locator('[data-action="start"]').click(); await page.waitForTimeout(500);
     const before = await page.evaluate(() => { const v = document.querySelector('video'); v.pause(); return v.playbackRate; });
     await page.locator('[data-setting="playback-rate"]').selectOption('2'); await page.waitForTimeout(300);
+    const oldMuted = await page.evaluate(() => document.querySelector('video').muted);
+    await page.locator('[data-setting="muted"]').uncheck();
+    assert.deepEqual(await page.evaluate(() => [document.querySelector('video').muted, window.__gm['xxt-video-muted']]), [oldMuted, false]);
     assert.deepEqual(await page.evaluate(() => { const v = document.querySelector('video'); return [v.paused, v.playbackRate, window.__gm['xxt-playback-rate']]; }), [true, before, 2]);
     observations.push({ night: 'setting saved without operating media' }); await page.close();
     await writeFile(resolve(temp, 'observations.json'), JSON.stringify(observations, null, 2));

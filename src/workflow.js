@@ -2,6 +2,9 @@
 (() => {
     'use strict';
     if (typeof GM_getValue !== 'function') return;
+    const R = globalThis.XxtTopicReading;
+    // Topic readers have their own foreground timer; never mount quiz/model controls there.
+    if (R?.isReaderPage()) return;
     const D = XxtCodexDom;
     const F = XxtCodexDocuments;
     const I = XxtCodexInterruptions;
@@ -15,11 +18,15 @@
     let messageValue = '展开“AI 接口设置”填写服务商、模型和 Key，再测试 AI。';
     let epoch = 0, frameClaimAt = 0, frameClaimTask = '', grantAt = 0, unloaded = false, parentManaged = false, navigationContent = null;
     let coordinator = null, coordinatorDistance = Infinity, expectedCheckTask = '', expectedVideoTask = '', navigationRequested = false;
-    let expectedDocumentTask = '', documentReportedTask = '', openedDocument = null;
+    let expectedDocumentTask = '', documentReportedTask = '', openedDocument = null, documentOwner = null;
+    let topicOwner = null, topicReportedTask = '';
     let quietPaused = false, resumeAfterQuiet = false, unknownSince = 0, unknownTask = '';
     const quietNow = () => GM_getValue('xxt-quiet-enabled', true) && XxtCodexCore.quietHoursAt();
     let selectedPlaybackRate = XxtCodexCore.normalizePlaybackRate(GM_getValue('xxt-playback-rate', 1));
     const getPlaybackRate = () => selectedPlaybackRate;
+    let selectedMuted = GM_getValue('xxt-video-muted', true) !== false;
+    const getMuted = () => selectedMuted;
+    let videoFinishProbe = null;
     let remoteVideoTask = '', remoteVideoRate = selectedPlaybackRate, remoteVideo = null, remoteVideoEnded = false, remotePlayBusy = false, remotePlayAttempts = 0, remotePlayAt = 0;
     let remoteMediaId = '', remoteMediaIdentity = '';
     let renderedInPage = null;
@@ -30,7 +37,8 @@
     const frames = new Map();
     const quizFrames = new Map();
     const retiredQuizForms = new Set();
-    let quizAuthorized = false;
+    const quizDocumentViews = new WeakMap();
+    let quizAuthorized = false, videoQuizRun = null;
     const controlledFrames = () => new Map([...frames, ...quizFrames]);
     const hasVideoQuiz = () => Q.across(pageWindow).length > 0 || (coursePage() && [...quizFrames.values()].some(entry => entry.task === courseTask() && Date.now() - entry.at < 4000));
     const pendingConfirmations = new Map();
@@ -67,6 +75,7 @@
     function save() { if (task) GM_setValue(`xxt-check:${task}`, record); }
     function setTask(value) {
         if (task === value) return;
+        topicOwner?.cancel(); topicOwner = null; topicReportedTask = '';
         if (coursePage() && task) {
             for (const [source, entry] of quizFrames) {
                 retiredQuizForms.add(`${entry.nonce}/${entry.signature}`);
@@ -75,7 +84,7 @@
             while (retiredQuizForms.size > 128) retiredQuizForms.delete(retiredQuizForms.values().next().value);
             quizFrames.clear();
         }
-        closeDocument(); documentReportedTask = '';
+        closeDocument(); documentReportedTask = ''; documentOwner = null;
         task = value; record = GM_getValue(`xxt-check:${task}`, {}) || {}; epoch++;
     }
     function post(target, type, data = {}) { target.postMessage({ source: 'xxt-codex-0.3', type, nonce, ...data }, '*'); }
@@ -104,7 +113,7 @@
     }
     function pause(reason) {
         if (quietPaused && quietNow()) { notify('夜间休息中（23:00—07:00，北京时间）'); return; }
-        closeDocument();
+        closeDocument(); topicOwner?.cancel(); topicOwner = null;
         cancelConfirmation(); pendingConfirmations.clear();
         automatic = false; stopped = true; epoch++; inFlight?.abort();
         record.paused = true; save(); notify(reason);
@@ -124,6 +133,7 @@
     }
     function applyMediaRate(video, rate = selectedPlaybackRate) {
         if (video && video.playbackRate !== rate) video.playbackRate = rate;
+        if (video && video.muted !== selectedMuted) video.muted = selectedMuted;
     }
     function syncPlaybackRate() {
         if (window.app?.configs) window.app.configs.playbackRate = selectedPlaybackRate;
@@ -143,6 +153,20 @@
         selectedPlaybackRate = XxtCodexCore.normalizePlaybackRate(value);
         GM_setValue('xxt-playback-rate', selectedPlaybackRate); syncPlaybackRate();
     }
+    function syncMuted() {
+        if (!automatic || stopped || quietNow()) return;
+        const visit = (win, depth = 0) => {
+            if (depth > 6) return;
+            try {
+                for (const video of win.document.querySelectorAll('video')) if (D.visible(video)) video.muted = selectedMuted;
+                for (const frame of win.document.querySelectorAll('iframe')) if (D.visible(frame)) visit(frame.contentWindow, depth + 1);
+            } catch {}
+        };
+        visit(pageWindow);
+        if (coursePage()) for (const [source, entry] of controlledFrames()) post(source, 'set-muted', { target: entry.nonce, task: courseTask(), muted: selectedMuted });
+    }
+    function changeMuted(value) { selectedMuted = !!value; GM_setValue('xxt-video-muted', selectedMuted); syncMuted(); }
+    const audioBlocked = () => pause('浏览器阻止有声自动播放，请手动播放或勾选静音后重新开始');
     function dismissInterruptions() {
         if (!automatic || stopped || quietNow()) return;
         I.dismiss(pageWindow);
@@ -217,6 +241,12 @@
         const details = panel.querySelector('details'); details.querySelectorAll('img').forEach(img => img.remove());
         for (const data of images) { const img = document.createElement('img'); img.src = data; img.style.width = '100%'; details.append(img); }
     }
+    function retryAttempts() {
+        if (record.attempts?.length) return record.attempts;
+        const prior = record.history?.at(-1);
+        // Old installations only retain one question snapshot; never attach unknown old letters to a different form.
+        return prior && record.lastQuestions?.length && JSON.stringify(prior.answers) === JSON.stringify(record.lastAnswers) ? [{ ...prior, questions: record.lastQuestions }] : [];
+    }
     async function solve(submit) {
         if (busy) return;
         busy = true;
@@ -230,10 +260,15 @@
         try {
             XxtCodexCore.validateQuestions(questions);
             const learned = XxtCodexCore.recallAnswers(questions, record.knownAnswers || []);
+            const retryPlan = XxtRetry.plan(questions, retryAttempts());
             const pendingEntries = entries.filter(entry => !learned.some(answer => answer.id === entry.question.id));
             const pendingQuestions = pendingEntries.map(entry => entry.question);
+            if (submit && retryPlan.forbidden.length) {
+                const seed = questions.map(q => learned.find(a => a.id === q.id) || { id: q.id, choices: [q.options[0].key] });
+                if (XxtRetry.novel(questions, seed, retryPlan.forbidden, learned).exhausted) { await navigate('保留平台已确认答案后，其余可区分的答案组合均已尝试'); return; }
+            }
             notify(pendingEntries.length ? `正在读取 ${pendingEntries.length} 道题的截图（${learned.length} 道已有平台正确答案）…` : '已读取全部平台正确答案，直接填写…');
-            await document.fonts.ready;
+            await XxtQuestionCapture.readyFonts(document, assertCurrent);
             const images = [];
             for (const entry of pendingEntries) {
                 assertCurrent();
@@ -244,13 +279,27 @@
             }
             assertCurrent(); showPreviews(images);
             let modelAnswers = [];
+            let answers;
             if (pendingQuestions.length) {
-                notify('AI 正在阅读题目截图并作答；不确定的题将随机填写…');
-                const response = await request('/solve', { questions: pendingQuestions, images, history: (record.history || []).slice(-5) });
-                modelAnswers = XxtCodexCore.resolveAnswers(pendingQuestions, response, { randomizeUncertain: submit });
+                let history = retryPlan.history;
+                for (let revision = 0; revision < 3; revision++) {
+                    notify(revision ? `AI返回了已失败组合，正在对比得分重新推理（复核 ${revision}/2）…` : 'AI 正在阅读截图，对比历史选择和得分作答…');
+                    const response = await request('/solve', { questions: pendingQuestions, images, history });
+                    assertCurrent();
+                    modelAnswers = XxtCodexCore.resolveAnswers(pendingQuestions, response, { randomizeUncertain: submit });
+                    answers = questions.map(question => [...learned, ...modelAnswers].find(answer => answer.id === question.id));
+                    if (!submit || !retryPlan.repeated(answers)) break;
+                    history = XxtRetry.comparisonHistory(retryPlan.history, answers, learned, revision + 1);
+                }
             }
             assertCurrent();
-            const answers = questions.map(question => [...learned, ...modelAnswers].find(answer => answer.id === question.id));
+            answers ||= questions.map(question => learned.find(answer => answer.id === question.id));
+            if (submit) {
+                const fresh = XxtRetry.novel(questions, answers, retryPlan.forbidden, learned);
+                if (fresh.exhausted) { await navigate('保留平台已确认答案后，其余可区分的答案组合均已尝试'); return; }
+                answers = fresh.answers;
+                if (retryPlan.repeated(answers)) throw new Error('已拦截重复的失败答案组合，停止提交');
+            }
             notify(answers.map(answer => `第 ${questions.findIndex(q => q.id === answer.id) + 1} 题：${answer.choices.join('、') || '不确定'}${answer.randomized ? '（随机）' : ''}\n${answer.explanation}`).join('\n\n'));
             if (!submit) return;
             await D.applyAnswers(entries, answers, assertCurrent);
@@ -341,6 +390,13 @@
             record.knownAnswers = [...(record.knownAnswers || []).filter(item => !learned.some(next => next.question.id === item.question.id)), ...learned];
             save();
         }
+        if (!result.allCorrect && questions.length && record.lastAnswers?.length === questions.length) {
+            record.attempts ||= retryAttempts();
+            if (record.lastAttemptResult !== result.fingerprint) {
+                record.attempts.push({ questions, answers: record.lastAnswers, finalScore: result.finalScore, maxScore: result.maxScore, review: result.review });
+                record.lastAttemptResult = result.fingerprint; save();
+            }
+        }
         const action = XxtCodexCore.nextAction(result);
         if (action === 'advance') { await navigate(`最终成绩 ${result.finalScore}/${result.maxScore}，已全对`); return; }
         if (action === 'skip') { await navigate(result.remaining === 0 ? '平台重做次数已用尽' : '平台未提供可用的重做按钮'); return; }
@@ -366,6 +422,37 @@
         const matches = [...document.querySelectorAll('.prev_white,.prev_title,[role="tab"],button,a,[onclick]')]
             .filter(el => D.enabled(el) && /^(?:\d+\s*)?(学习检测|学习测验|章节测验)$/.test(D.text(el)));
         return D.unique(matches.filter(el => !matches.some(other => other !== el && other.contains(el))));
+    }
+    function finishVideo() {
+        if (!coursePage()) return false;
+        if (stopped || quietNow() || hasVideoQuiz()) return true;
+        const nativeVideo = window.app?._getVideoEl?.();
+        if (nativeVideo && !nativeVideo.ended) return true;
+        const currentTask = courseTask();
+        if (videoFinishProbe?.task === currentTask) return true;
+        const probe = videoFinishProbe = { task: currentTask, epoch, pending: true };
+        expectedVideoTask = '';
+        (async () => {
+            notify('视频已结束，正在核对本章学习检测…');
+            const deadline = Date.now() + 5000;
+            do {
+                if (videoFinishProbe !== probe || courseTask() !== currentTask || epoch !== probe.epoch || stopped || quietNow()) return;
+                if (hasVideoQuiz()) { videoFinishProbe = null; return; }
+                if (findCheckTab()) {
+                    completedTasks.delete(currentTask);
+                    globalThis.XxtCodexControl.enterCheckStep('视频结束，先处理本章学习检测…'); return;
+                }
+                if (checkStep() || expectedCheckTask === currentTask || D.extract(document).length || D.readResult(document)) return;
+                await D.delay(200);
+            } while (Date.now() < deadline);
+            beforeClick();
+            if (videoFinishProbe !== probe || courseTask() !== currentTask || epoch !== probe.epoch) return;
+            await advanceCourse('视频结束，未发现本章学习检测');
+        })().catch(error => { if (!stopped && !quietNow()) pause(error.message); }).finally(() => {
+            probe.pending = false;
+            if ((stopped || quietNow()) && videoFinishProbe === probe) videoFinishProbe = null;
+        });
+        return true;
     }
     async function continueKnowledge(reason) {
         beforeClick();
@@ -393,6 +480,20 @@
             report('document-finished', { task }); automatic = false;
         } else throw new Error('文献预览已完成，未找到课程导航，请返回课程继续');
     }
+    async function readTopics() {
+        if (!R || !coursePage() || topicReportedTask === task || expectedCheckTask === task) return false;
+        const entries = R.find(pageWindow);
+        if (!entries.length) return false;
+        if (entries.length !== 1) throw new Error('检测到多个专题阅读入口，已暂停，请先打开要阅读的一项');
+        expectedDocumentTask = courseTask(); expectedVideoTask = ''; unknownSince = 0;
+        stopPlayer();
+        topicOwner ||= R.createOwner({ notify, assertCurrent: beforeClick });
+        if (await topicOwner.step(entries[0], task)) {
+            topicReportedTask = task;
+            await continueKnowledge('专题目录每项已前台停留90秒');
+        }
+        return true;
+    }
     async function readDocuments() {
         if (D.extract(document).length || D.readResult(document) || (coursePage() && expectedCheckTask === courseTask())) return false;
         const entries = F.find(document);
@@ -416,9 +517,24 @@
                 while (Date.now() < deadline) {
                     assertCurrent();
                     if (preview.closed?.()) throw new Error('文件预览提前关闭，已暂停，请重新开始');
-                    notify(`文献已打开：${entry.label}，等待 ${Math.ceil((deadline - Date.now()) / 1000)} 秒后关闭…`);
-                    F.scroll(document, 1 - (deadline - Date.now()) / 60000);
+                    notify(`文献已打开：${entry.label}，滚动阅读中，等待 ${Math.max(0, Math.ceil((deadline - Date.now()) / 1000))} 秒后关闭…`);
+                    if (preview.root) await F.scroll(document, (60000 - (deadline - Date.now())) / 50000, preview.root, assertCurrent);
                     await D.delay(200);
+                }
+                if (preview.root) {
+                    notify('文献已停留 60 秒，正在确认内部滚动条已到底…');
+                    const bottomDeadline = Date.now() + 8000;
+                    let stable = 0, previousExtent = -1;
+                    while (stable < 2 && Date.now() < bottomDeadline) {
+                        assertCurrent();
+                        const state = await F.scroll(document, 1, preview.root, assertCurrent);
+                        if (state.unavailable || !state.count) throw new Error('此预览无法控制内部滚动，继续尝试本章检测');
+                        stable = state.count > 0 && !state.unavailable && state.bottom ? (state.extent === previousExtent ? stable + 1 : 1) : 0;
+                        previousExtent = state.extent;
+                        if (stable < 2) await D.delay(400);
+                    }
+                    if (stable < 2) throw new Error('无法确认文档内部滚动到底，继续尝试本章检测');
+                    notify('文档内部已滚到底（平台任务点以页面显示为准）');
                 }
                 assertCurrent(); preview.close();
                 if (preview.closed) {
@@ -445,7 +561,7 @@
         if (quietPaused) return;
         quietPaused = true; resumeAfterQuiet = automatic;
         automatic = false; stopped = true; unknownSince = 0; unknownTask = ''; epoch++; inFlight?.abort();
-        closeDocument(); cancelConfirmation(); pendingConfirmations.clear();
+        closeDocument(); topicOwner?.rest(); cancelConfirmation(); pendingConfirmations.clear();
         stopPlayer(); remoteVideo?.pause();
         if (coursePage()) for (const [source, entry] of controlledFrames()) post(source, 'quiet-rest', { target: entry.nonce, resume: resumeAfterQuiet });
         notify(resumeAfterQuiet ? '夜间休息中，07:00 后自动继续（北京时间）' : '夜间休息中，点击开始可预约 07:00 后运行');
@@ -489,9 +605,15 @@
         busy = true;
         let responseWatch;
         const currentEpoch = epoch;
+        const quizDocument = hit.win.document;
+        if (!quizDocumentViews.has(quizDocument)) quizDocumentViews.set(quizDocument, crypto.randomUUID());
+        const viewId = quizDocumentViews.get(quizDocument);
+        videoQuizRun = currentEpoch;
         const guard = () => {
             beforeClick();
-            if (epoch !== currentEpoch || (!coursePage() && renderedInPage === false) ||
+            // Intersection with the viewport changes during scrolling/capture. It is not
+            // a document or question identity, so do not retire a valid answer on that signal.
+            if (epoch !== currentEpoch || hit.win.closed || hit.win.document !== quizDocument ||
                 (coursePage() && hit.win !== pageWindow && !visibleDescendant(pageWindow, hit.win))) throw new Error('视频弹题页面已切换，取消旧答案');
         };
         const continueQuiz = async (entry, button) => {
@@ -523,20 +645,47 @@
                 }
                 const key = `xxt-video-quiz:${task}/${entry.question.id}`;
                 const state = GM_getValue(key, {}) || {};
+                state.attempts ||= (state.history || []).filter(h => h.answers?.some(a => a.id === entry.question.id && a.choices?.length))
+                    .map(h => ({ ...h, questions: [entry.question] }));
                 const saveState = () => GM_setValue(key, state);
                 const assertQuestion = () => { guard(); if (Q.extract(panel)?.signature !== entry.signature) throw new Error('视频弹题已变化，取消旧答案'); };
-                let requireFreshFeedback = false;
+                // A persisted "submitted" flag cannot prove this freshly rendered form
+                // was sent. Old versions saved it before clicking and kept it across reloads.
+                if (state.phase === 'submitted' && state.viewId !== viewId && !existingFeedback.wrong && !existingFeedback.correct &&
+                    !Q.submitting(panel) && existingFeedback.editable && Q.control(panel, /^(提交|确定)$/)) {
+                    state.phase = ''; state.recoveredOldSubmission = true; saveState();
+                    notify('检测到旧的已提交记录，但当前原题尚未提交，正在恢复作答…');
+                }
+                let requireFreshFeedback = state.phase === 'submitted' && !!state.requireFreshFeedback;
                 if (state.phase !== 'submitted') {
                     notify(`检测到视频内${entry.question.type === 'multiple' ? '多选' : entry.question.type === 'boolean' ? '判断' : '单选'}题，正在作答…`);
                     let answer;
-                    if (state.known?.length) answer = { id: entry.question.id, choices: state.known };
+                    if (state.known?.length) {
+                        answer = { id: entry.question.id, choices: state.known };
+                        if (XxtRetry.plan([entry.question], state.attempts).repeated([answer]))
+                            throw new Error('平台提示的参考答案已被判错，已暂停，避免重复提交同一答案');
+                    }
                     else {
-                        await panel.ownerDocument.fonts.ready; assertQuestion();
+                        const retryPlan = XxtRetry.plan([entry.question], state.attempts);
+                        const seed = [{ id: entry.question.id, choices: [entry.question.options[0].key] }];
+                        if (XxtRetry.novel([entry.question], seed, retryPlan.forbidden).exhausted)
+                            throw new Error('视频弹题的可区分答案组合均已尝试，已暂停，请核对题目或平台反馈');
+                        await XxtQuestionCapture.readyFonts(panel.ownerDocument, assertQuestion); assertQuestion();
                         const image = await XxtQuestionCapture.capture(panel, { guard: assertQuestion, backgroundColor: '#171717',
                             ignoreElements: el => el.tagName === 'VIDEO' || !!el.closest?.('[data-xxt-codex-panel]') });
                         assertQuestion(); showPreviews([image]);
-                        const response = await request('/solve', { questions: [entry.question], images: [image], history: (state.history || []).slice(-5) });
-                        assertQuestion(); answer = XxtCodexCore.resolveAnswers([entry.question], response, { randomizeUncertain: true })[0];
+                        let history = retryPlan.history;
+                        for (let revision = 0; revision <= 2; revision++) {
+                            const response = await request('/solve', { questions: [entry.question], images: [image], history });
+                            assertQuestion(); answer = XxtCodexCore.resolveAnswers([entry.question], response, { randomizeUncertain: true })[0];
+                            if (!retryPlan.repeated([answer])) break;
+                            history = XxtRetry.comparisonHistory(retryPlan.history, [answer], [], revision + 1);
+                            if (revision < 2) notify('视频弹题候选与失败答案相同，正在让 AI 对比反馈重新推理…');
+                        }
+                        const fresh = XxtRetry.novel([entry.question], [answer], retryPlan.forbidden);
+                        if (fresh.exhausted) throw new Error('视频弹题的可区分答案组合均已尝试，已暂停');
+                        answer = fresh.answers[0];
+                        if (fresh.changed) notify('AI 复核后仍重复，改用尚未提交的视频弹题候选（尚未确认正确）');
                     }
                     await Q.apply(entry, answer, assertQuestion);
                     const submit = Q.control(panel, /^(提交|确定)$/);
@@ -544,16 +693,35 @@
                     assertQuestion(); requireFreshFeedback = Q.feedback(panel, entry.question).wrong;
                     responseWatch?.close(); responseWatch = Q.watchResponse(panel);
                     state.phase = 'submitted'; state.at = Date.now(); state.choices = answer.choices;
+                    state.viewId = viewId; state.requireFreshFeedback = requireFreshFeedback;
                     state.submissions = (state.submissions || 0) + 1; saveState(); submit.click();
                     notify('已提交视频弹题，等待平台反馈…');
                 }
+                if (!responseWatch) notify('正在核对视频弹题现有提交状态，等待平台判题反馈…');
+                responseWatch ||= Q.watchResponse(panel);
+                let activationRepairs = 0, activationAt = Date.now();
                 const outcome = await waitFor(() => {
                     guard(); const active = Q.find(hit.win.document);
                     if (!active || Q.extract(active)?.signature && Q.extract(active).signature !== entry.signature) return { advanced: true };
                     const feedback = Q.feedback(active, entry.question);
-                    const submitting = [...active.querySelectorAll('#videoquiz-submitting')].some(D.visible);
-                    return (!submitting && feedback.wrong && (!requireFreshFeedback || responseWatch?.changed())) || feedback.proceed ? { feedback } : null;
-                }, 20000);
+                    const submitting = Q.submitting(active);
+                    if ((!submitting && feedback.wrong && (!requireFreshFeedback || responseWatch?.changed())) || feedback.proceed) return { feedback };
+                    const submit = Q.control(active, /^(提交|确定)$/);
+                    if (!activationRepairs && !submitting && !responseWatch.started() && !feedback.wrong && !feedback.correct && feedback.editable &&
+                        submit && Date.now() - activationAt >= 2000) {
+                        assertQuestion();
+                        if (Q.selection(entry).sort().join('') !== [...(state.choices || [])].sort().join('')) throw new Error('等待提交期间选项已变化，已暂停旧答案');
+                        activationRepairs++; activationAt = Date.now(); state.activationRepairs = (state.activationRepairs || 0) + 1; saveState();
+                        notify('原题仍可提交且未开始判题，正在补点一次提交…'); submit.click();
+                    }
+                    return null;
+                }, 20000).catch(error => {
+                    if (/^页面响应超时/.test(error.message) && epoch === currentEpoch && automatic && !stopped && !Q.submitting(panel) && Q.control(panel, /^(提交|确定)$/)) {
+                        state.phase = 'unconfirmed'; saveState();
+                        throw new Error('视频弹题未收到判题反馈，已停止自动补交；点击开始可恢复原题');
+                    }
+                    throw error;
+                });
                 responseWatch?.close(); responseWatch = null;
                 guard();
                 if (outcome.advanced) { state.phase = 'done'; saveState(); continue; }
@@ -563,11 +731,18 @@
                     state.phase = 'done'; saveState(); continue;
                 }
                 if (feedback.choices?.length) state.known = feedback.choices;
+                if (!state.attempts.some(attempt => XxtRetry.batchKey([entry.question], attempt.answers) ===
+                    XxtRetry.batchKey([entry.question], [{ id: entry.question.id, choices: state.choices }]))) {
+                    state.attempts.push({ questions: [entry.question], finalScore: 0, maxScore: 1,
+                        answers: [{ id: entry.question.id, choices: state.choices }], review: [feedback.text.slice(0, 3000)] });
+                }
                 state.history = [...(state.history || []), { finalScore: 0, maxScore: 1,
                     answers: [{ id: entry.question.id, choices: state.choices }], review: [feedback.text.slice(0, 3000)] }].slice(-5);
                 saveState();
-                if (feedback.remaining === 0 || (!feedback.retry && !feedback.resubmit)) throw new Error('视频弹题未答对，平台没有可用重试按钮，已暂停');
-                if (!feedback.retry && feedback.resubmit) { state.phase = ''; saveState(); continue; }
+                if (feedback.remaining === 0) throw new Error('视频弹题可答次数已用尽，已暂停');
+                if (!feedback.retry && !feedback.resubmit) throw new Error(feedback.reviewRequired ? '视频弹题要求回看，请先完成页面提示的回看' :
+                    '视频弹题未答对，原题暂不可重交且没有可用重试按钮，已暂停');
+                if (!feedback.retry && feedback.resubmit) { state.phase = ''; saveState(); notify('视频弹题答错，直接在原题改选后重新提交…'); continue; }
                 feedback.retry.click();
                 await waitFor(() => {
                     const active = Q.find(hit.win.document);
@@ -580,19 +755,31 @@
             const video = hit.win.document.querySelector('video');
             if (video && !video.ended) {
                 applyMediaRate(video);
-                try { await video.play(); } catch { video.muted = true; await video.play(); }
+                try { await video.play(); } catch { if (!selectedMuted) throw new Error('浏览器阻止有声自动播放，请手动播放或勾选静音'); video.muted = true; await video.play(); }
             }
             if (coursePage()) {
                 if (video?.ended) window.app?._continueAfterVideo(); else window.app?.play();
             }
             notify('视频弹题已结束，继续本节视频…');
-        } catch (error) { if (!unloaded) pause(error.message); }
-        finally { responseWatch?.close(); busy = false; inFlight = null; }
+        } catch (error) {
+            // An older run must not pause a new Start/grant or the next chapter.
+            const superseded = currentEpoch !== epoch || (coursePage() && task !== courseTask());
+            if (!unloaded && !superseded) pause(error.message);
+        }
+        finally { responseWatch?.close(); if (videoQuizRun === currentEpoch) videoQuizRun = null; busy = false; inFlight = null; }
     }
     async function tick() {
         mount();
         if (!await syncQuietHours()) return;
         dismissInterruptions();
+        if (coursePage()) for (const [source, entry] of quizFrames) {
+            // Layout-hidden/detached players retire their old authorization. Scrolling an
+            // attached iframe out of the viewport leaves its layout and authorization intact.
+            if (entry.task !== courseTask() || !visibleDescendant(pageWindow, source)) {
+                if (entry.task !== courseTask()) retiredQuizForms.add(`${entry.nonce}/${entry.signature}`);
+                post(source, 'stop', { target: entry.nonce }); quizFrames.delete(source);
+            }
+        }
         if (!isTop && !coursePage() && Q.find(document)) report('video-quiz-ready', { viewVisible: renderedInPage,
             quizSignature: `${Q.extract(Q.find(document))?.signature || D.text(Q.find(document))}/${document.querySelector('video')?.currentSrc || ''}` });
         if (coursePage()) tickConfirmations();
@@ -621,6 +808,7 @@
             if (hasVideoQuiz()) return;
             const result = D.readResult(document);
             if (result) { busy = true; await processResult(result); return; }
+            if (await readTopics()) return;
             if (await readDocuments()) return;
             if (D.enabled(document.querySelector('.btnSubmit.workBtnIndex')) && D.extract(document).length) {
                 if (record.phase === 'submitted') {
@@ -638,7 +826,7 @@
     }
     function grant(source, entry, resume = false) {
         post(source, entry.kind === 'video' ? 'grant-video' : entry.kind === 'document' ? 'grant-document' : 'grant', { target: entry.nonce, task: courseTask(), resume,
-            rate: getPlaybackRate(), mediaId: entry.mediaId });
+            rate: getPlaybackRate(), muted: getMuted(), mediaId: entry.mediaId });
     }
     async function tickRemoteVideo() {
         if (quietNow()) { remoteVideo?.pause(); return; }
@@ -664,7 +852,7 @@
         remotePlayAt = Date.now(); remotePlayAttempts++; remotePlayBusy = true;
         applyMediaRate(video, remoteVideoRate);
         try {
-            try { await video.play(); } catch { video.muted = true; await video.play(); }
+            try { await video.play(); } catch { if (!selectedMuted) throw new Error('浏览器阻止有声自动播放，请手动播放或勾选静音'); video.muted = true; await video.play(); }
             remotePlayAttempts = 0; if (!stopped && automatic) report('status', { task: remoteVideoTask, value: '正在播放本节视频…' });
         } catch { report('status', { task: remoteVideoTask, value: '正在等待新视频加载，尝试自动播放…' }); }
         finally { remotePlayBusy = false; }
@@ -672,6 +860,7 @@
     async function start() {
         if (quietNow()) { suspendForQuiet(); resumeAfterQuiet = true; notify('已预约：夜间休息中，07:00 后自动开始（北京时间）'); return; }
         stopped = false; automatic = true; navigationRequested = false; documentReportedTask = ''; epoch++;
+        if (videoQuizRun !== null) inFlight?.abort();
         dismissInterruptions();
         syncPlaybackRate();
         if (coursePage()) {
@@ -739,7 +928,7 @@
         const output = document.createElement('pre'); output.style.cssText = 'white-space:pre-wrap;word-break:break-word;font:inherit;margin:0';
         const details = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = '查看发送给 AI 的题目截图'; details.append(summary);
         panel.append(actions, output, details);
-        themeStatus = XxtAssistantTheme.decorate(panel, { title, actions, output, details, playbackRate: getPlaybackRate(), onRateChange: changePlaybackRate,
+        themeStatus = XxtAssistantTheme.decorate(panel, { title, actions, output, details, playbackRate: getPlaybackRate(), onRateChange: changePlaybackRate, muted: getMuted(), onMutedChange: changeMuted,
             onAiChange: () => { stop(); notify('AI 配置已更改，请测试后重新开始自动。'); }, onQuietChange: () => syncQuietHours().catch(error => pause(error.message)) });
         document.body.append(panel); notify(messageValue);
         if (coordinator && !coursePage()) panel.hidden = true;
@@ -795,9 +984,11 @@
                 let accessible = false;
                 try { accessible = !!event.source.document; } catch {}
                 if (!accessible) {
+                    const previous = quizFrames.get(event.source);
+                    const newClaim = !previous || previous.nonce !== data.nonce || previous.task !== courseTask() || previous.signature !== data.quizSignature;
                     quizFrames.set(event.source, { nonce: data.nonce, task: courseTask(), at: Date.now(), signature: data.quizSignature });
                     post(event.source, 'owner', { target: data.nonce });
-                    if (automatic && !stopped) post(event.source, 'grant-video-quiz', { target: data.nonce, task: courseTask(), resume: true });
+                    if (automatic && !stopped) post(event.source, 'grant-video-quiz', { target: data.nonce, task: courseTask(), resume: newClaim });
                 }
             }
             if (data.type === 'video-quiz-finished' && data.task === courseTask() && quizFrames.get(event.source)?.nonce === data.nonce) {
@@ -807,8 +998,10 @@
                 }
             }
             if (data.type === 'document-ready' && !F.find(document).length && !completedDocumentSenders.has(data.nonce) && expectedCheckTask !== courseTask() &&
+                (!documentOwner || documentOwner === event.source || !canClaim(documentOwner, frames.get(documentOwner))) &&
                 canClaim(event.source, data)) {
                 expectedDocumentTask = courseTask(); expectedVideoTask = '';
+                documentOwner = event.source;
                 frames.set(event.source, { nonce: data.nonce, kind: 'document', viewVisible: data.viewVisible, seenAt: Date.now() });
                 post(event.source, 'owner', { target: data.nonce });
                 if (automatic && !stopped) grant(event.source, frames.get(event.source));
@@ -836,7 +1029,7 @@
                 frames.get(event.source)?.mediaId === data.mediaId && !completedMedia.has(`${data.nonce}/${data.mediaId}`)) {
                 completedMedia.add(`${data.nonce}/${data.mediaId}`);
                 expectedVideoTask = '';
-                if (!globalThis.XxtCodexControl.enterCheckStep()) window.app?._continueAfterVideo();
+                if (!finishVideo()) window.app?._continueAfterVideo();
             }
             if (data.type === 'ready' && !completedSenders.has(data.nonce) && canClaim(event.source, data)) {
                 if (data.viewVisible === true) { expectedCheckTask = courseTask(); expectedDocumentTask = ''; expectedVideoTask = ''; }
@@ -863,6 +1056,7 @@
             if (data.type === 'grant-video') {
                 if (data.mediaId !== remoteMediaId) return;
                 remoteVideoTask = data.task; selectedPlaybackRate = remoteVideoRate = XxtCodexCore.normalizePlaybackRate(data.rate); parentManaged = true;
+                if (typeof data.muted === 'boolean') selectedMuted = data.muted;
                 if (data.resume) stopped = false;
                 if (!stopped) automatic = true;
             }
@@ -870,8 +1064,15 @@
                 selectedPlaybackRate = XxtCodexCore.normalizePlaybackRate(data.rate); syncPlaybackRate();
                 const select = panel?.querySelector('[data-setting="playback-rate"]'); if (select) select.value = String(selectedPlaybackRate);
             }
+            if (data.type === 'set-muted' && typeof data.muted === 'boolean' && (data.task === task || data.task === remoteVideoTask)) {
+                selectedMuted = data.muted; syncMuted();
+                const input = panel?.querySelector('[data-setting="muted"]'); if (input) input.checked = selectedMuted;
+            }
             if (data.type === 'grant-video-quiz') {
-                if (data.resume) stopped = false;
+                if (data.resume) {
+                    if (videoQuizRun !== null) { epoch++; inFlight?.abort(); }
+                    stopped = false;
+                }
                 if (!stopped) { setTask(data.task); parentManaged = true; quizAuthorized = true; automatic = true; }
             }
             if (data.type === 'stop') {
@@ -886,10 +1087,19 @@
     globalThis.XxtCodexControl = {
         isQuietHours: quietNow,
         getPlaybackRate,
+        getMuted, audioBlocked,
+        finishVideo,
+        beforeNextChapter() {
+            if (!coursePage() || completedTasks.has(courseTask())) return false;
+            if (hasVideoQuiz() || videoFinishProbe?.pending) return true;
+            if (!checkStep() && expectedCheckTask !== courseTask()) return finishVideo();
+            return true;
+        },
         hasVideoQuiz,
-        shouldHold() { return quietNow() || hasVideoQuiz() || (coursePage() && (stopped || expectedDocumentTask === courseTask() || F.find(document).length > 0 || expectedCheckTask === courseTask() ||
+        shouldHold() { return quietNow() || hasVideoQuiz() || (coursePage() && (stopped || R?.find(pageWindow).length > 0 || expectedDocumentTask === courseTask() || F.find(document).length > 0 || expectedCheckTask === courseTask() ||
             (expectedVideoTask !== courseTask() && (checkStep() || (frameClaimTask === courseTask() && Date.now() - frameClaimAt < 4000))))); },
         noteVideoNavigation() {
+            videoFinishProbe = null;
             if (openedDocument) { closeDocument(); epoch++; }
             expectedDocumentTask = '';
             expectedCheckTask = ''; expectedVideoTask = courseTask(); frameClaimAt = 0;
@@ -911,5 +1121,5 @@
     window.addEventListener('message', handleMessage);
     mount();
     const timer = setInterval(() => { tick().catch(error => pause(error.message)); }, 700);
-    window.addEventListener('pagehide', () => { closeDocument(); cancelConfirmation(); pendingConfirmations.clear(); unloaded = true; stopped = true; epoch++; inFlight?.abort(); visibilityObserver?.disconnect(); clearInterval(timer); }, { once: true });
+    window.addEventListener('pagehide', () => { topicOwner?.cancel(); closeDocument(); cancelConfirmation(); pendingConfirmations.clear(); unloaded = true; stopped = true; epoch++; inFlight?.abort(); visibilityObserver?.disconnect(); clearInterval(timer); }, { once: true });
 })();

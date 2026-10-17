@@ -1,6 +1,16 @@
 /* Inline verified question images in the screenshot clone so html2canvas cannot silently omit them. */
 (() => {
     const D = XxtCodexDom;
+    async function bounded(promise, milliseconds, message, guard = () => {}) {
+        let timer, monitor;
+        try {
+            guard();
+            return await Promise.race([promise, new Promise((resolve, reject) => {
+                timer = setTimeout(() => reject(new Error(message)), milliseconds);
+                monitor = setInterval(() => { try { guard(); } catch (error) { reject(error); } }, 250);
+            })]);
+        } finally { clearTimeout(timer); clearInterval(monitor); }
+    }
     function raster(image, doc) {
         if (!image.complete || !image.naturalWidth || !image.naturalHeight) throw new Error('图片尚未加载');
         const scale = Math.min(1, 4096 / image.naturalWidth, 4096 / image.naturalHeight);
@@ -63,7 +73,7 @@
         const scale = Math.min(1.5, 4096 / Math.max(1, rect.width), 8192 / Math.max(1, rect.height), Math.sqrt(12000000 / Math.max(1, rect.width * rect.height)));
         if (scale < 0.5) throw new Error('题目过长，无法生成清晰完整的截图');
         check();
-        const canvas = await html2canvas(element, { backgroundColor, scale, useCORS: true, logging: false, ignoreElements,
+        const canvas = await bounded(html2canvas(element, { backgroundColor, scale, useCORS: true, logging: false, ignoreElements,
             async onclone(cloneDoc, cloneElement) {
                 const cloned = [...cloneElement.querySelectorAll('img')];
                 for (const [index, data] of prepared) {
@@ -72,10 +82,11 @@
                     image.removeAttribute('srcset'); image.removeAttribute('sizes'); image.loading = 'eager'; image.src = data;
                     await image.decode();
                 }
-            } });
+            } }), 20000, '题目截图生成超时，已停止本轮提交', check);
         check(); const data = canvas.toDataURL('image/png');
         if (data.length > 4 * 1024 * 1024) throw new Error('题目截图超过大小限制，请检查截图预览');
         return data;
     }
-    globalThis.XxtQuestionCapture = { capture };
+    const readyFonts = (doc, guard) => bounded(doc.fonts.ready, 8000, '题目字体加载超时，请刷新课程页后重试', guard);
+    globalThis.XxtQuestionCapture = { capture, readyFonts, bounded };
 })();

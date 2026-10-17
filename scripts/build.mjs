@@ -7,6 +7,7 @@ const header = `// ==UserScript==
 // @namespace    xuexitong-ai-assistant.public
 // @version      ${version}
 // @description  视频、文献与学习练习辅助；自配 AI API；不含任何密钥
+// @supportURL   https://github.com/Flyer2333/xuexitong-ai-assistant/issues
 // @match        https://*.chaoxing.com/*
 // @match        https://chaoxing.com/*
 // @run-at       document-idle
@@ -19,7 +20,7 @@ const header = `// ==UserScript==
 // ==/UserScript==
 
 `;
-const files = ['vendor/jquery-3.6.0.min.js','vendor/html2canvas-1.4.1.min.js','src/core.cjs','src/dom.js','src/capture.js','src/documents.js','src/interruptions.js','src/video-quiz.js','src/ai.js','src/theme.js','src/workflow.js','src/player.js'];
+const files = ['vendor/jquery-3.6.0.min.js','vendor/html2canvas-1.4.1.min.js','src/core.cjs','src/retry.cjs','src/dom.js','src/capture.js','src/documents.js','src/reading.js','src/interruptions.js','src/video-quiz.js','src/ai.js','src/theme.js','src/workflow.js','src/player.js'];
 const content = header + '(() => { const module = undefined, exports = undefined, define = undefined;\n' + files.map(path=>readFileSync(resolve(root,path),'utf8')).join('\n') + '\n})();\n';
 mkdirSync(resolve(root,'dist'),{recursive:true});
 writeFileSync(resolve(root,'dist/xuexitong-ai-assistant.user.js'),content);

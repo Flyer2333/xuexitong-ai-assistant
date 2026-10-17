@@ -1,4 +1,5 @@
 node_modules/
+TASK_PROGRESS.md
 src/local/
 local/
 artifacts/

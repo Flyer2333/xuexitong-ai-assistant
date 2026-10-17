@@ -1,0 +1,41 @@
+name: Bug / 问题反馈
+description: 报告脚本异常，帮助作者定位并修复问题。
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！作者会及时排查修复，并持续完善功能。请提供复现步骤；处理进度可在本 Issue 中查看。
+        **这是公开页面，请勿提交 API Key、Codex 连接码、Cookie、学号、姓名或完整课程链接。截图和日志请先脱敏。**
+  - type: input
+    id: environment
+    attributes:
+      label: 使用环境
+      description: 脚本版本、浏览器版本、脚本管理器及版本。
+      placeholder: 例如：1.0.2 / Edge / Tampermonkey
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 遇到了什么问题？
+      description: 说明实际发生了什么，以及你预期的行为。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: "1. 打开什么类型的页面\n2. 点击什么按钮\n3. 在哪一步出现异常"
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: AI 服务商和模型（如涉及）
+      description: 只填写名称和模型 ID，不要填写密钥、连接码或带凭据的地址。
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 脱敏截图或错误信息（可选）
+      description: 可在这里拖入已脱敏的截图。不要粘贴完整控制台或网络日志。

@@ -1,7 +1,7 @@
 /* Official model catalog. Refresh sources and capabilities before every release. */
 (function (root) {
     'use strict';
-    const verifiedAt = '2026-10-18', release = '1.0.8';
+    const verifiedAt = '2026-10-18', release = '1.0.9';
     const rows = (ids, profile = '', vision = null) => ids.map(id => ({ id, profile, vision }));
     const providers = {
         openai: { sources: ['https://developers.openai.com/api/docs/models','https://developers.openai.com/api/docs/guides/latest-model'], models: rows(['gpt-6-astra','gpt-6.1-sol','gpt-6-sol'], 'openai', true).concat(rows(['gpt-6-luna'], 'openai-none', true)) },
@@ -10,7 +10,7 @@
         deepseek: { sources: ['https://api-docs.deepseek.com/zh-cn/','https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/'], models: rows(['deepseek-flash'], 'deepseek', true).concat(rows(['deepseek-v4-pro'], 'deepseek', false)) },
         xiaomi: { sources: ['https://mimo.mi.com/docs/en-US/quick-start/model','https://mimo.mi.com/docs/zh-CN/api/chat/openai-api'], models: rows(['mimo-v2.6-pro','mimo-v2.6-flash','mimo-v2.6-pro-ultraspeed'], 'thinking', true), note: 'UltraSpeed 需相应权限；即将下线的 2.5 系列不列入快捷选项。' },
         kimi: { sources: ['https://platform.kimi.com/docs/models','https://platform.kimi.com/docs/guide/use-thinking-models','https://platform.kimi.com/docs/guide/use-reasoning-effort'], models: rows(['kimi-k3'], 'effort-three', true).concat(rows(['kimi-k2.6'], 'thinking', true), rows(['kimi-k2.7-code','kimi-k2.7-code-highspeed'], '', true)), note: 'K3 和 K2.7 Code 始终思考；K2.6 可关闭思考。' },
-        zhipu: { sources: ['https://docs.bigmodel.cn/cn/guide/models','https://docs.z.ai/guides/llm/glm-5.3'], models: rows(['glm-5.3'], 'effort-three', false), note: '国内与国际平台的权限、套餐及上线范围可能不同。Flash/FlashX 的国内文档本次未成功读取，暂用手动输入并保留默认推理设置。' },
+        zhipu: { sources: ['https://docs.bigmodel.cn/cn/guide/models','https://docs.z.ai/guides/llm/glm-5.3'], models: rows(['glm-5.3'], 'effort-three', false).concat(rows(['glm-5.3-flash','glm-5.3-flashx'],'effort-three',true)), note: '国内与国际平台权限、套餐及上线范围可能不同；FlashX 需相应 API 权限。' },
         qwen: { sources: ['https://help.aliyun.com/zh/model-studio/models','https://help.aliyun.com/zh/model-studio/batch-inference','https://help.aliyun.com/zh/model-studio/deep-thinking/'], models: rows(['qwen3.8-max','qwen3.8-flash','qwen3.7-plus','qwen3.7-flash','qwen3.6-plus','qwen3.6-flash','qwen3.5-plus','qwen3.5-flash'], 'qwen', true).concat(rows(['qwen3.7-max'], 'qwen', null), rows(['qwen3-vl-plus','qwen3-vl-flash'], '', true)), note: '需匹配百炼地域和业务空间；第三方托管模型请手动填写。' },
         doubao: { sources: ['https://docs.volcengine.com/docs/ark/model-list?lang=zh','https://docs.volcengine.com/docs/ark/deep-thinking?lang=zh'], models: rows(['doubao-seed-evolving','doubao-seed-2-1-pro-260915','doubao-seed-2-1-lite-260915','doubao-seed-2-1-pro-260628','doubao-seed-2-1-turbo-260628','doubao-seed-2-0-lite-260428'], 'thinking', true), note: '需先开通模型；专属 ep- 接入点请选择手动填写。这里只提供思考开关，不套用 Managed Agents 的强度参数。' },
         siliconflow: { sources: ['https://docs.siliconflow.cn/docs/release-notes/overview','https://www.siliconflow.com/zh-tw/blog/glm-5.3-now-live-on-siliconflow'], models: rows(['zai-org/GLM-5.3'], 'effort-three', false).concat(rows(['deepseek-ai/DeepSeek-V4-Pro','deepseek-ai/DeepSeek-V3.2','Pro/deepseek-ai/DeepSeek-V3.2','Pro/moonshotai/Kimi-K2.6','Pro/zai-org/GLM-5.1','Qwen/Qwen3.6-27B','Qwen/Qwen3.6-35B-A3B'])), note: '聚合平台目录随时调整；国内/国际目录和权限可能不同，未列出的完整组织/模型 ID 可手动填写。' },

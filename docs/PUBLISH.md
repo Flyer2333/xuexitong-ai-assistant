@@ -34,7 +34,7 @@ git init
 git add .
 git status --short
 git diff --cached --stat
-git commit -m "Prepare public AI assistant 1.0.8"
+git commit -m "Prepare public AI assistant 1.0.9"
 git branch -M main
 git remote add origin https://github.com/YOUR_NAME/xuexitong-ai-assistant.git
 git push -u origin main
@@ -55,7 +55,7 @@ https://raw.githubusercontent.com/YOUR_NAME/xuexitong-ai-assistant/main/dist/xue
 ## 发布 Release
 
 1. 仓库 **Releases → Draft a new release**。
-2. 创建标签 `v1.0.8`，标题“超星学习通自动化脚本（支持接入各种主流AI模型api） 1.0.8”。
+2. 创建标签 `v1.0.9`，标题“超星学习通自动化脚本（支持接入各种主流AI模型api） 1.0.9”。
 3. 写明此次变化、支持的协议、测试范围、API 费用及来源许可情况。
 4. 上传 `dist/xuexitong-ai-assistant.user.js` 作为可安装附件；源码由 GitHub 自动生成 ZIP。
 5. 核对附件版本与标签一致，确认没有预填 Key，再发布。供用户安装的附件应为 `.user.js`；源码 ZIP 不能通过油猴的备份导入功能安装。
@@ -64,7 +64,9 @@ https://raw.githubusercontent.com/YOUR_NAME/xuexitong-ai-assistant/main/dist/xue
 
 修改 `src` 后，更新 `package.json`、`src/theme.js`、检查器版本断言和 CHANGELOG，再构建、测试并提交 dist，最后发布新 Release。保持 userscript 的 @name/@namespace 一致，让油猴能够识别同一个脚本。
 
-当前未配置 `@updateURL/@downloadURL`，用户应手动检查并安装更新。若要配置自动更新，在构建脚本元数据中填写稳定的实际地址，并先验证更新来源。远端更新后的脚本仍有原有网络与存储权限，维护者应审查 PR 和发布文件。
+从 1.0.9 起配置固定仓库的 `@updateURL/@downloadURL`：检查版本读取 dist 中的 `.meta.js`，安装读取 `.user.js`。面板检查读取 `dist/release.json`。每次发布更新 `src/release.json` 的版本、日期和仅本次更新内容，构建同步生成三个产物，必须在同一提交发布；不要只上传 JSON 宣布一个尚未上传的脚本版本。
+
+面板通过固定来源的匿名请求检查更新，安装交给油猴；WLAN 开关只约束面板，不控制油猴独立检查计划。远端更新后的脚本仍有原有网络与存储权限，维护者应审查发布内容。用户步骤见[更新教程](UPDATES.md)。
 
 ## 开发环境与测试
 

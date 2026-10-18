@@ -20,7 +20,11 @@ for(const path of paths){
 }
 const script=readFileSync(resolve(root,'dist/xuexitong-ai-assistant.user.js'),'utf8');
 assert(script.includes(themeAssetCode()),'Stale theme assets');
-for(const name of ['core.cjs','retry.cjs','dom.js','capture.js','documents.js','reading.js','page-tasks.js','interruptions.js','video-quiz.js','models.cjs','ai.js','theme.js','workflow.js','player.js'])assert(script.includes(readFileSync(resolve(root,'src',name),'utf8')),`Stale build: ${name}`);
+for(const name of ['core.cjs','retry.cjs','dom.js','capture.js','documents.js','reading.js','page-tasks.js','interruptions.js','video-quiz.js','models.cjs','ai.js','updates.cjs','theme.js','workflow.js','player.js'])assert(script.includes(readFileSync(resolve(root,'src',name),'utf8')),`Stale build: ${name}`);
 const {version}=JSON.parse(readFileSync(resolve(root,'package.json'),'utf8'));
 assert(script.includes(`@version      ${version}`));assert(script.includes('@connect      *'));
+const release=JSON.parse(readFileSync(resolve(root,'src/release.json'),'utf8'));
+assert.equal(release.version,version);assert.deepEqual(JSON.parse(readFileSync(resolve(root,'dist/release.json'),'utf8')),release);
+const meta=readFileSync(resolve(root,'dist/xuexitong-ai-assistant.meta.js'),'utf8');assert.equal(meta,script.slice(0,script.indexOf('(() => {')));
+assert(meta.includes('@updateURL    https://raw.githubusercontent.com/Flyer2333/xuexitong-ai-assistant/main/dist/xuexitong-ai-assistant.meta.js'));
 console.log(`Public build checked: ${paths.length} files, source sync and JavaScript syntax; theme assets hash-verified; no known personal paths or paired credentials.`);

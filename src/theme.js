@@ -30,6 +30,10 @@
 [data-xxt-codex-panel] .ai-form{display:grid;gap:10px;margin-top:12px}
 [data-xxt-codex-panel] .ai-form>label{display:grid;gap:4px;font-size:11px}
 [data-xxt-codex-panel] .ai-form small{color:var(--muted);font-size:11px;line-height:1.6}
+[data-xxt-codex-panel] .ai-form>.xxt-update-auto-label{display:flex;align-items:center;gap:5px}
+[data-xxt-codex-panel] [data-xxt-updates] ul,[data-xxt-codex-panel] [data-xxt-updates] ol{padding-left:18px;margin:8px 0;font-size:12px}
+[data-xxt-codex-panel] [data-xxt-updates] li+li{margin-top:6px}
+[data-xxt-codex-panel] .xxt-update-dismiss{justify-self:start;border:1px solid var(--line);border-radius:8px;padding:6px 12px;background:#fff;color:var(--accent)}
 [data-xxt-codex-panel] .ai-buttons{display:flex;gap:8px}
 [data-xxt-codex-panel] .ai-buttons button{border:1px solid #c7d2fe;background:var(--tint);color:#4338ca;border-radius:8px;padding:8px 12px}
 [data-xxt-codex-panel] .xxt-feedback{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;color:var(--muted);font-size:11px;line-height:1.7}
@@ -137,7 +141,7 @@
         panel.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:2147483647;width:min(360px,calc(100vw - 36px));text-align:left';
         const make = (tag,cls) => { const el = document.createElement(tag); el.className = cls; return el; };
         const shell = make('div','xxt-shell'), header = make('header','xxt-head'), name = document.createElement('div');
-        const version = make('div','xxt-version'); version.textContent = 'LEARNING ASSISTANT · 1.0.8'; name.append(title,version);
+        const version = make('div','xxt-version'); version.textContent = 'LEARNING ASSISTANT · ' + XxtUpdates.release.version; name.append(title,version);
         const picker = make('div','xxt-skin-picker'); picker.setAttribute('role','group'); picker.setAttribute('aria-label','外观主题');
         const pickerLabel = make('span','xxt-skin-label'); pickerLabel.textContent = '外观'; picker.append(pickerLabel);
         const mascot = make('div','xxt-theme-mascot'); mascot.setAttribute('aria-hidden','true'); mascot.hidden = true;
@@ -182,7 +186,7 @@
         const authorNote = document.createElement('div'); authorNote.textContent = '脚本根据作者自己的实际使用需求编写，并持续完善。遇到暂不支持的场景，或有希望增加的功能，欢迎及时反馈；作者会第一时间跟进，评估后补充相应设置和功能。';
         feedbackCopy.append(authorNote,feedbackNote,privacyNote); feedbackDetails.append(feedbackSummary,feedbackCopy);
         feedback.append(feedbackLinks,feedbackDetails);
-        actions.className = 'xxt-actions'; body.append(actions,status,output,aiSettings(onAiChange),settings,details,feedback); header.append(name,fold); shell.append(header,picker,body); panel.replaceChildren(shell,mascot);
+        actions.className = 'xxt-actions'; body.append(actions,status,output,aiSettings(onAiChange),settings,details,XxtUpdates.create(),feedback); header.append(name,fold); shell.append(header,picker,body); panel.replaceChildren(shell,mascot);
         applySkin(GM_getValue('xxt-ui-skin','default'));
         let drag;
         header.onpointerdown = event => { if (event.button !== 0 || event.target.closest('button')) return; const r = panel.getBoundingClientRect(); drag = {x:event.clientX-r.left,y:event.clientY-r.top}; header.setPointerCapture(event.pointerId); event.preventDefault(); };

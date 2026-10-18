@@ -1,11 +1,12 @@
 {
   "name": "xuexitong-ai-assistant",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "private": true,
   "description": "超星学习通自动化脚本（支持接入各种主流AI模型api）",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test tests/api.test.mjs tests/retry.test.mjs tests/models.test.mjs && node scripts/check-model-catalog.mjs && node scripts/check-public.mjs",
+    "test": "node --test tests/api.test.mjs tests/retry.test.mjs tests/models.test.mjs tests/updates.test.mjs && node scripts/check-model-catalog.mjs && node scripts/check-public.mjs",
+    "test:updates": "node tests/verify-updates.mjs",
     "check:models": "node scripts/check-model-catalog.mjs",
     "test:models": "node tests/verify-model-picker.mjs",
     "test:browser": "node tests/public-browser.mjs",

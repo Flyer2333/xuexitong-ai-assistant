@@ -3,12 +3,16 @@ import { resolve } from 'node:path';
 import { themeAssetCode } from './theme-assets.mjs';
 const root = resolve(import.meta.dirname, '..');
 const {version} = JSON.parse(readFileSync(resolve(root,'package.json'),'utf8'));
+const release = JSON.parse(readFileSync(resolve(root,'src/release.json'),'utf8'));
+if (release.version !== version) throw Error('Release notes version does not match package version');
 const header = `// ==UserScript==
 // @name         超星学习通自动化脚本（支持接入各种主流AI模型api）
 // @namespace    xuexitong-ai-assistant.public
 // @version      ${version}
 // @description  视频、文献与学习练习辅助；自配 AI API；不含任何密钥
 // @supportURL   https://github.com/Flyer2333/xuexitong-ai-assistant/issues
+// @updateURL    https://raw.githubusercontent.com/Flyer2333/xuexitong-ai-assistant/main/dist/xuexitong-ai-assistant.meta.js
+// @downloadURL  https://raw.githubusercontent.com/Flyer2333/xuexitong-ai-assistant/main/dist/xuexitong-ai-assistant.user.js
 // @match        https://*.chaoxing.com/*
 // @match        https://chaoxing.com/*
 // @run-at       document-idle
@@ -21,8 +25,10 @@ const header = `// ==UserScript==
 // ==/UserScript==
 
 `;
-const files = ['vendor/jquery-3.6.0.min.js','vendor/html2canvas-1.4.1.min.js','src/core.cjs','src/retry.cjs','src/dom.js','src/capture.js','src/documents.js','src/reading.js','src/page-tasks.js','src/interruptions.js','src/video-quiz.js','src/models.cjs','src/ai.js','src/theme.js','src/workflow.js','src/player.js'];
-const content = header + '(() => { const module = undefined, exports = undefined, define = undefined;\n' + themeAssetCode() + files.map(path=>readFileSync(resolve(root,path),'utf8')).join('\n') + '\n})();\n';
+const files = ['vendor/jquery-3.6.0.min.js','vendor/html2canvas-1.4.1.min.js','src/core.cjs','src/retry.cjs','src/dom.js','src/capture.js','src/documents.js','src/reading.js','src/page-tasks.js','src/interruptions.js','src/video-quiz.js','src/models.cjs','src/ai.js','src/updates.cjs','src/theme.js','src/workflow.js','src/player.js'];
+const content = header + '(() => { const module = undefined, exports = undefined, define = undefined;\n' + `globalThis.XxtRelease = ${JSON.stringify(release)};\n` + themeAssetCode() + files.map(path=>readFileSync(resolve(root,path),'utf8')).join('\n') + '\n})();\n';
 mkdirSync(resolve(root,'dist'),{recursive:true});
 writeFileSync(resolve(root,'dist/xuexitong-ai-assistant.user.js'),content);
+writeFileSync(resolve(root,'dist/xuexitong-ai-assistant.meta.js'),header);
+writeFileSync(resolve(root,'dist/release.json'),JSON.stringify(release,null,2)+'\n');
 console.log(`Built public userscript ${version}; no local configuration included.`);

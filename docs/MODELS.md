@@ -14,7 +14,7 @@
 | DeepSeek | `deepseek-flash`、`deepseek-v4-pro`；Flash 为当前官方调用别名 | [首次调用](https://api-docs.deepseek.com/zh-cn/)、[请求参数](https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/) |
 | 小米 MiMo | V2.6 Pro、Flash、Pro UltraSpeed；即将下线的 2.5 系列不作为快捷选项 | [模型目录](https://mimo.mi.com/docs/en-US/quick-start/model)、[Chat API](https://mimo.mi.com/docs/zh-CN/api/chat/openai-api) |
 | Kimi | K3、K2.6、K2.7 Code 及高速版；不再列出已下线的 K2.5/moonshot-v1 | [模型目录](https://platform.kimi.com/docs/models)、[思考模式](https://platform.kimi.com/docs/guide/use-thinking-models)、[K3 强度](https://platform.kimi.com/docs/guide/use-reasoning-effort) |
-| 智谱 GLM | `glm-5.3`；国内 Flash/FlashX 页面本次读取失败，未从展示名推测 ID 或能力，仍可手动填写 | [国内目录](https://docs.bigmodel.cn/cn/guide/models)、[GLM-5.3 官方说明](https://docs.z.ai/guides/llm/glm-5.3) |
+| 智谱 GLM | `glm-5.3`、`glm-5.3-flash`、`glm-5.3-flashx`；Flash/FlashX 原生支持图片，参数与 5.3 一致，不能关闭思考，需匹配 API 权限 | [国内目录](https://docs.bigmodel.cn/cn/guide/models)、[GLM-5.3 官方说明](https://docs.z.ai/guides/llm/glm-5.3) |
 | 千问 / 百炼 | 已核实的 3.8/3.7/3.6/3.5 系列和 VL；托管第三方模型可手填 | [模型大全](https://help.aliyun.com/zh/model-studio/models)、[模型范围](https://help.aliyun.com/zh/model-studio/batch-inference)、[深度思考](https://help.aliyun.com/zh/model-studio/deep-thinking/) |
 | 豆包 / 火山方舟 | 当前 Seed 2.1 Pro/Lite/Turbo、Evolving 和 2.0 Lite；专属 `ep-` 接入点使用手动填写 | [模型目录](https://docs.volcengine.com/docs/ark/model-list?lang=zh)、[深度思考](https://docs.volcengine.com/docs/ark/deep-thinking?lang=zh) |
 | 硅基流动 | 已核实的 GLM、DeepSeek、Kimi、Qwen 托管 ID；保留组织前缀，不与原厂 ID 混用。国际与国内目录可能不同 | [调整公告](https://docs.siliconflow.cn/docs/release-notes/overview)、[GLM-5.3 部署说明](https://www.siliconflow.com/zh-tw/blog/glm-5.3-now-live-on-siliconflow) |
@@ -35,7 +35,7 @@
 | Kimi K3 | low / high / max | `reasoning_effort`，不能关闭思考 |
 | Kimi K2.6 | 开启 / 关闭思考 | `thinking.type` |
 | Kimi K2.7 Code | 服务商默认值 | 始终思考，不发送关闭参数 |
-| 智谱 GLM-5.3 | low / high / max | `reasoning_effort`，不能关闭思考 |
+| 智谱 GLM-5.3 / Flash / FlashX | low / high / max | `reasoning_effort`，不能关闭思考 |
 | 当前目录的千问混合思考模型 | 开启 / 关闭思考 | 顶层 `enable_thinking` 布尔值 |
 | 当前目录的豆包模型 | 开启 / 关闭思考 | `thinking.type`；不套用另一套 Managed Agents API 的强度枚举 |
 | 硅基流动 GLM-5.3 | low / high / max | 平台部署支持的 `reasoning_effort` |

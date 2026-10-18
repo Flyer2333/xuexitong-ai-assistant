@@ -5,8 +5,12 @@
     const inputs = 'input[type="radio"],input[type="checkbox"],[role="radio"],[role="checkbox"]';
     const feedbackSelector = '.ans-videoquiz-result,.ans-videoquiz-tip,.videoquiz-result,[data-quiz-feedback],[role="status"],.rightInfo,.spanHas,#spanHas,#spanNot,#spanNotBack,#spanNotBackPoint';
     const optionVisible = el => D.visible(el) || D.visible(el.closest('label') || el.labels?.[0]);
-    const recognized = new Set();
+    // An iframe can replace its Document while keeping its WindowProxy. Never
+    // inspect cached elements from that retired document when scanning siblings.
+    const documents = new WeakMap();
     function find(doc) {
+        let recognized = documents.get(doc);
+        if (!recognized) { recognized = new Set(); documents.set(doc, recognized); }
         const possible = new Set(doc.querySelectorAll(selectors));
         for (const panel of recognized) {
             if (!panel.isConnected || !D.visible(panel)) recognized.delete(panel);
@@ -30,10 +34,13 @@
     }
     function across(win, depth = 0, found = []) {
         if (depth > 6) return found;
-        try {
-            const panel = find(win.document); if (panel) found.push({ panel, win });
-            for (const frame of win.document.querySelectorAll('iframe')) if (D.visible(frame)) across(frame.contentWindow, depth + 1, found);
-        } catch {}
+        let doc;
+        try { doc = win.document; } catch { return found; }
+        // A changing/unavailable player must not prevent scanning other players.
+        try { const panel = find(doc); if (panel) found.push({ panel, win }); } catch {}
+        for (const frame of doc.querySelectorAll('iframe')) {
+            try { if (D.visible(frame)) across(frame.contentWindow, depth + 1, found); } catch {}
+        }
         return found;
     }
     function hash(value) { let n = 2166136261; for (const ch of value) n = Math.imul(n ^ ch.charCodeAt(0), 16777619); return (n >>> 0).toString(16); }

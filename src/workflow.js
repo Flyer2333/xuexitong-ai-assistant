@@ -15,6 +15,8 @@
     const isTop = pageWindow === pageWindow.top;
     const tabId = sessionStorage.getItem('xxt-codex-tab') || nonce;
     sessionStorage.setItem('xxt-codex-tab', tabId);
+    const courseParams = new URLSearchParams(location.search);
+    const autoKey = `xxt-auto:${location.origin}/${courseParams.get('courseId') || courseParams.get('courseid') || ''}/${courseParams.get('clazzid') || courseParams.get('clazzId') || ''}`;
     let panel, themeStatus, automatic = false, busy = false, stopped = false, task = '', record = {}, inFlight;
     let messageValue = '展开“AI 接口设置”填写服务商、模型和 Key，再测试 AI。';
     let epoch = 0, frameClaimAt = 0, frameClaimTask = '', grantAt = 0, unloaded = false, parentManaged = false, navigationContent = null;
@@ -23,6 +25,7 @@
     let topicOwner = null, topicReportedTask = '';
     let pageReviewNeeded = false, pageSignature = '', pageChangedAt = 0, pageBlockedAt = 0;
     let pageVideo = null, pagePlaying = false, stepTransition = null, currentCard = '', stepDone = new Set();
+    const startedVideos = new WeakSet();
     let parentReadingFiles = false;
     const topicDone = new WeakSet();
     let quietPaused = false, resumeAfterQuiet = false, unknownSince = 0, unknownTask = '';
@@ -122,6 +125,7 @@
     }
     function pause(reason) {
         if (quietPaused && quietNow()) { notify('夜间休息中（23:00—07:00，北京时间）'); return; }
+        if (isTop && coursePage()) sessionStorage.removeItem(autoKey);
         closeDocument(); topicOwner?.cancel(); topicOwner = null;
         cancelConfirmation(); pendingConfirmations.clear();
         automatic = false; stopped = true; epoch++; inFlight?.abort();
@@ -159,7 +163,20 @@
         }
         return false;
     }
-    function videoDone(asset) { return asset.video?.ended || P.complete(asset.container) || sourceFinished(asset, 'video'); }
+    function videoDone(asset) {
+        try { if (Q.find(asset.win.document)) return false; } catch {}
+        if (quizFrames.has(asset.win)) return false;
+        const video = asset.video;
+        if (!video) {
+            const worker = [...frames].find(([source, entry]) => entry.kind === 'video' && covers(asset, source, 'video'))?.[1];
+            if (worker?.running && !worker.ended && !completedMedia.has(`${worker.nonce}/${worker.mediaId}`)) return false;
+        }
+        // Platform credit can turn green at 90%, before a final popup. Once a
+        // loaded video is in progress, wait for its actual ended event instead.
+        if (video && (startedVideos.has(video) || (video.readyState > 0 && Number.isFinite(video.duration) && video.currentTime > 0)))
+            return video.ended;
+        return video?.ended || P.complete(asset.container) || sourceFinished(asset, 'video');
+    }
     function fileDone(asset) { return (GM_getValue(`xxt-documents:${task}`, []) || []).includes(asset.entry?.id) ||
         completedFileAssets.has(asset.id) || (!asset.entry && sourceFinished(asset, 'document')); }
     function questionDone(asset) { return sourceFinished(asset, 'check') || (asset.win === pageWindow && record.phase === 'done'); }
@@ -229,6 +246,7 @@
             if (pending.video) {
                 pageBlockedAt = 0;
                 const video = pending.video;
+                startedVideos.add(video);
                 if (pageVideo !== video) {
                     pageVideo?.pause(); window.app?._detachVideoEvents?.();
                     video.scrollIntoView({ block: 'center', behavior: 'auto' });
@@ -795,6 +813,8 @@
         let responseWatch;
         const currentEpoch = epoch;
         const quizDocument = hit.win.document;
+        const quizVideo = quizDocument.querySelector('video');
+        if (quizVideo) startedVideos.add(quizVideo);
         if (!quizDocumentViews.has(quizDocument)) quizDocumentViews.set(quizDocument, crypto.randomUUID());
         const viewId = quizDocumentViews.get(quizDocument);
         videoQuizRun = currentEpoch;
@@ -993,7 +1013,7 @@
         }
         if (coursePage() && syncCard()) return;
         try {
-            const videoQuiz = Q.across(pageWindow)[0];
+            const videoQuiz = Q.across(pageWindow).find(hit => !quizFrames.has(hit.win));
             if (videoQuiz && (coursePage() || isTop || quizAuthorized)) { await solveVideoQuiz(videoQuiz); return; }
             if (hasVideoQuiz()) return;
             if (coursePage() && await coordinatePage()) return;
@@ -1079,6 +1099,7 @@
         finally { remotePlayBusy = false; }
     }
     async function start() {
+        if (isTop && coursePage()) sessionStorage.setItem(autoKey, '1');
         if (quietNow()) { suspendForQuiet(); resumeAfterQuiet = true; notify('已预约：夜间休息中，07:00 后自动开始（北京时间）'); return; }
         stopped = false; automatic = true; navigationRequested = false; documentReportedTask = ''; epoch++;
         if (videoQuizRun !== null) inFlight?.abort();
@@ -1115,6 +1136,7 @@
         if (window.app) { window.app.configs.autoplay = false; window.app._isPlaying = false; window.app._clearCheckInterval(); window.app._videoEl?.pause(); }
     }
     function stop() {
+        if (isTop && coursePage()) sessionStorage.removeItem(autoKey);
         resumeAfterQuiet = false;
         pause('已停止自动答题。');
         if (coursePage()) { stopPlayer(); for (const [source, entry] of controlledFrames()) post(source, 'stop', { target: entry.nonce }); }
@@ -1204,9 +1226,11 @@
             if (data.type === 'video-quiz-ready' && data.viewVisible !== false && visibleDescendant(pageWindow, event.source)) {
                 if (task && task !== courseTask()) return;
                 if (typeof data.quizSignature !== 'string' || retiredQuizForms.has(`${data.nonce}/${data.quizSignature}`)) return;
-                let accessible = false;
-                try { accessible = !!event.source.document; } catch {}
-                if (!accessible) {
+                // Document access alone does not prove the parent scanner saw
+                // this dynamically mounted form. Delegate only a missing form;
+                // retain an existing child lease until it reports completion.
+                const detectedHere = Q.across(pageWindow).some(hit => hit.win === event.source);
+                if (quizFrames.has(event.source) || !detectedHere) {
                     const previous = quizFrames.get(event.source);
                     const newClaim = !previous || previous.nonce !== data.nonce || previous.task !== courseTask() || previous.signature !== data.quizSignature;
                     quizFrames.set(event.source, { nonce: data.nonce, task: courseTask(), at: Date.now(), signature: data.quizSignature });
@@ -1280,7 +1304,8 @@
                 frames.get(event.source)?.nonce === data.nonce && !completedSenders.has(data.nonce)) {
                 completedSenders.add(data.nonce); pageReviewNeeded = true; advanceCourse(data.reason).catch(error => pause(error.message));
             }
-            if (data.type === 'status' && data.task === courseTask() && !completedSenders.has(data.nonce)) notify(data.value);
+            if (data.type === 'status' && automatic && !stopped && !quietNow() && data.task === courseTask() && !completedSenders.has(data.nonce) &&
+                !(data.value === '正在播放本节视频…' && hasVideoQuiz())) notify(data.value);
         } else if (!isTop && data.target === nonce && chooseCoordinator(event.source)) {
             if (data.type === 'quiet-rest') { suspendForQuiet(); resumeAfterQuiet = data.resume; }
             if (data.type === 'confirm-done' && submitRequest?.id === data.requestId && submitRequest.kind === data.kind && submitRequest.task === data.task && automatic && !stopped) submitRequest.confirmed = true;
@@ -1334,7 +1359,8 @@
             return true;
         },
         hasVideoQuiz,
-        shouldHold() { if (coursePage() && P && videoCandidate()) return quietNow() || stopped || hasVideoQuiz() || !!stepTransition;
+        shouldHold() { if (coursePage() && !automatic) return true;
+            if (coursePage() && P && videoCandidate()) return quietNow() || stopped || hasVideoQuiz() || !!stepTransition;
             return quietNow() || hasVideoQuiz() || (coursePage() && (stopped || !!stepTransition || R?.find(pageWindow).some(entry => !topicDone.has(entry.element)) || expectedDocumentTask === courseTask() || F.find(document).length > 0 || expectedCheckTask === courseTask() ||
             (expectedVideoTask !== courseTask() && (checkStep() || (frameClaimTask === courseTask() && Date.now() - frameClaimAt < 4000))))); },
         noteVideoNavigation() {
@@ -1344,7 +1370,7 @@
             expectedCheckTask = ''; expectedVideoTask = courseTask(); frameClaimAt = 0;
             if (automatic && !stopped) notify('已切换到新视频，正在重新接管播放…');
         },
-        onVideoPlaying() { if (!stopped && !hasVideoQuiz() && expectedCheckTask !== courseTask()) notify('正在播放本节视频…'); },
+        onVideoPlaying() { if (automatic && !stopped && !hasVideoQuiz() && expectedCheckTask !== courseTask()) notify('正在播放本节视频…'); },
         enterCheckStep(status) {
             if (hasVideoQuiz()) return true;
             if (quietNow()) return true;
@@ -1362,6 +1388,9 @@
     };
     window.addEventListener('message', handleMessage);
     mount();
+    // Preserve only an explicitly started run, in this tab and this course.
+    // Stops/errors clear it; first visits and other courses never auto-submit.
+    if (isTop && coursePage() && sessionStorage.getItem(autoKey) === '1') start().catch(error => pause(error.message));
     const timer = setInterval(() => { tick().catch(error => pause(error.message)); }, 700);
     window.addEventListener('pagehide', () => { topicOwner?.cancel(); closeDocument(); cancelConfirmation(); pendingConfirmations.clear(); unloaded = true; stopped = true; epoch++; inFlight?.abort(); visibilityObserver?.disconnect(); clearInterval(timer); }, { once: true });
 })();

@@ -30,7 +30,7 @@ git init
 git add .
 git status --short
 git diff --cached --stat
-git commit -m "Prepare public AI assistant 1.0.6"
+git commit -m "Prepare public AI assistant 1.0.7"
 git branch -M main
 git remote add origin https://github.com/YOUR_NAME/xuexitong-ai-assistant.git
 git push -u origin main
@@ -51,7 +51,7 @@ https://raw.githubusercontent.com/YOUR_NAME/xuexitong-ai-assistant/main/dist/xue
 ## 发布 Release
 
 1. 仓库 **Releases → Draft a new release**。
-2. 创建标签 `v1.0.6`，标题“超星学习通自动化脚本（支持接入各种主流AI模型api） 1.0.6”。
+2. 创建标签 `v1.0.7`，标题“超星学习通自动化脚本（支持接入各种主流AI模型api） 1.0.7”。
 3. 写明此次变化、支持的协议、测试范围、API 费用及来源许可情况。
 4. 上传 `dist/xuexitong-ai-assistant.user.js` 作为可安装附件；源码由 GitHub 自动生成 ZIP。
 5. 核对附件版本与标签一致，确认没有预填 Key，再发布。供用户安装的附件应为 `.user.js`；源码 ZIP 不能通过油猴的备份导入功能安装。
@@ -80,3 +80,10 @@ XXT_BROWSER_CHANNEL=chromium npm run test:browser
 ```
 
 PowerShell 使用 `$env:XXT_BROWSER_CHANNEL = 'chromium'` 再执行命令。测试结果写入项目 `artifacts/`，该目录被 Git 忽略。默认测试使用模拟网站和模型，不需要真实 Key，也不会向真实课程提交答案；服务商账号与实际课程需要另外验证。
+
+## 每次更新时维护说明
+
+- 新增功能同时写入 README 最前面的“产品功能”和完整功能说明，讲清操作方式与限制。
+- 在 README 最下面的“更新记录”时间表增加一行，填写日期、版本、更新类型和用户能感受到的具体变化；保留既有历史。
+- CHANGELOG 与时间表保持一致，只写功能、行为变化和问题修复。
+- 不把文档编辑过程、宣传文案增删、打包上传步骤、内部版本迁移或作者工作记录列为用户更新内容；这些信息留在本地任务进度中。

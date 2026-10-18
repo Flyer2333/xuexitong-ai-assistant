@@ -104,7 +104,7 @@
         panel.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:2147483647;width:min(360px,calc(100vw - 36px));text-align:left';
         const make = (tag,cls) => { const el = document.createElement(tag); el.className = cls; return el; };
         const shell = make('div','xxt-shell'), header = make('header','xxt-head'), name = document.createElement('div');
-        const version = make('div','xxt-version'); version.textContent = 'LEARNING ASSISTANT · 1.0.6'; name.append(title,version);
+        const version = make('div','xxt-version'); version.textContent = 'LEARNING ASSISTANT · 1.0.7'; name.append(title,version);
         const picker = make('div','xxt-skin-picker'); picker.setAttribute('role','group'); picker.setAttribute('aria-label','外观主题');
         const pickerLabel = make('span','xxt-skin-label'); pickerLabel.textContent = '外观'; picker.append(pickerLabel);
         const mascot = make('div','xxt-theme-mascot'); mascot.setAttribute('aria-hidden','true'); mascot.hidden = true;

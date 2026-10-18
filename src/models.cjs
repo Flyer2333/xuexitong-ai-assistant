@@ -1,12 +1,12 @@
 /* Official model catalog. Refresh sources and capabilities before every release. */
 (function (root) {
     'use strict';
-    const verifiedAt = '2026-10-18', release = '1.0.9';
+    const verifiedAt = '2026-10-18', release = '1.0.10';
     const rows = (ids, profile = '', vision = null) => ids.map(id => ({ id, profile, vision }));
     const providers = {
         openai: { sources: ['https://developers.openai.com/api/docs/models','https://developers.openai.com/api/docs/guides/latest-model'], models: rows(['gpt-6-astra','gpt-6.1-sol','gpt-6-sol'], 'openai', true).concat(rows(['gpt-6-luna'], 'openai-none', true)) },
         claude: { sources: ['https://platform.claude.com/docs/en/models/overview','https://platform.claude.com/docs/en/build-with-claude/effort'], models: rows(['claude-fable-5-1','claude-opus-5-5','claude-sonnet-5-5','claude-haiku-5-5'], 'claude', true) },
-        gemini: { sources: ['https://ai.google.dev/gemini-api/docs/models','https://ai.google.dev/gemini-api/docs/thinking'], models: rows(['gemini-3.8-flash'], 'gemini', true).concat(rows(['gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash-lite','gemini-3.1-pro-preview','gemini-3-flash-preview','gemini-2.5-pro','gemini-2.5-flash','gemini-2.5-flash-lite'], '', true)), note: '预览版可能变更；2.5 系列仅部分已有账号可用。' },
+        gemini: { sources: ['https://ai.google.dev/gemini-api/docs/models','https://ai.google.dev/gemini-api/docs/thinking'], models: rows(['gemini-3.8-flash'], 'gemini', true).concat(rows(['gemini-4-argon'], '', true), rows(['gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash-lite','gemini-3.1-pro-preview','gemini-3-flash-preview','gemini-2.5-pro','gemini-2.5-flash','gemini-2.5-flash-lite'], '', true)), note: '预览版可能变更；2.5 系列仅部分已有账号可用。' },
         deepseek: { sources: ['https://api-docs.deepseek.com/zh-cn/','https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/'], models: rows(['deepseek-flash'], 'deepseek', true).concat(rows(['deepseek-v4-pro'], 'deepseek', false)) },
         xiaomi: { sources: ['https://mimo.mi.com/docs/en-US/quick-start/model','https://mimo.mi.com/docs/zh-CN/api/chat/openai-api'], models: rows(['mimo-v2.6-pro','mimo-v2.6-flash','mimo-v2.6-pro-ultraspeed'], 'thinking', true), note: 'UltraSpeed 需相应权限；即将下线的 2.5 系列不列入快捷选项。' },
         kimi: { sources: ['https://platform.kimi.com/docs/models','https://platform.kimi.com/docs/guide/use-thinking-models','https://platform.kimi.com/docs/guide/use-reasoning-effort'], models: rows(['kimi-k3'], 'effort-three', true).concat(rows(['kimi-k2.6'], 'thinking', true), rows(['kimi-k2.7-code','kimi-k2.7-code-highspeed'], '', true)), note: 'K3 和 K2.7 Code 始终思考；K2.6 可关闭思考。' },

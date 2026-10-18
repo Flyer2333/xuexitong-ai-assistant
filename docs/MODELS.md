@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | OpenAI | GPT-6 Astra、6.1 Sol、6 Sol、6 Luna；使用 API ID，不使用 Codex 界面里的显示名称 | [模型目录](https://developers.openai.com/api/docs/models)、[GPT-6 参数](https://developers.openai.com/api/docs/guides/latest-model) |
 | Claude | Fable 5.1、Opus/Sonnet/Haiku 5.5 | [模型 ID](https://platform.claude.com/docs/en/models/overview)、[effort](https://platform.claude.com/docs/en/build-with-claude/effort) |
-| Gemini | 当前 Flash 与 Flash-Lite、仍列出的 Pro/Flash 预览版和 2.5 系列；旧账号限制见官方说明 | [模型目录](https://ai.google.dev/gemini-api/docs/models)、[思考参数](https://ai.google.dev/gemini-api/docs/thinking) |
+| Gemini | Gemini 4 Argon（推理暂用默认值）、当前 Flash 与 Flash-Lite、仍列出的 Pro/Flash 预览版和 2.5 系列；旧账号限制见官方说明 | [模型目录](https://ai.google.dev/gemini-api/docs/models)、[思考参数](https://ai.google.dev/gemini-api/docs/thinking) |
 | DeepSeek | `deepseek-flash`、`deepseek-v4-pro`；Flash 为当前官方调用别名 | [首次调用](https://api-docs.deepseek.com/zh-cn/)、[请求参数](https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/) |
 | 小米 MiMo | V2.6 Pro、Flash、Pro UltraSpeed；即将下线的 2.5 系列不作为快捷选项 | [模型目录](https://mimo.mi.com/docs/en-US/quick-start/model)、[Chat API](https://mimo.mi.com/docs/zh-CN/api/chat/openai-api) |
 | Kimi | K3、K2.6、K2.7 Code 及高速版；不再列出已下线的 K2.5/moonshot-v1 | [模型目录](https://platform.kimi.com/docs/models)、[思考模式](https://platform.kimi.com/docs/guide/use-thinking-models)、[K3 强度](https://platform.kimi.com/docs/guide/use-reasoning-effort) |
@@ -18,6 +18,8 @@
 | 千问 / 百炼 | 已核实的 3.8/3.7/3.6/3.5 系列和 VL；托管第三方模型可手填 | [模型大全](https://help.aliyun.com/zh/model-studio/models)、[模型范围](https://help.aliyun.com/zh/model-studio/batch-inference)、[深度思考](https://help.aliyun.com/zh/model-studio/deep-thinking/) |
 | 豆包 / 火山方舟 | 当前 Seed 2.1 Pro/Lite/Turbo、Evolving 和 2.0 Lite；专属 `ep-` 接入点使用手动填写 | [模型目录](https://docs.volcengine.com/docs/ark/model-list?lang=zh)、[深度思考](https://docs.volcengine.com/docs/ark/deep-thinking?lang=zh) |
 | 硅基流动 | 已核实的 GLM、DeepSeek、Kimi、Qwen 托管 ID；保留组织前缀，不与原厂 ID 混用。国际与国内目录可能不同 | [调整公告](https://docs.siliconflow.cn/docs/release-notes/overview)、[GLM-5.3 部署说明](https://www.siliconflow.com/zh-tw/blog/glm-5.3-now-live-on-siliconflow) |
+
+本次 1.0.10 复查补充 `gemini-4-argon`，支持文字和图片输入；[官方型号页](https://ai.google.dev/gemini-api/docs/models/gemini-4-argon)已列出该 ID。暂不推断其与旧版思考参数的兼容性，面板沿用服务商默认值。小米模型目录返回空正文，豆包模型目录及参数页仅返回需启用 JavaScript 的提示，DeepSeek 请求参数页本次超时；这些部分保留此前同日核对结果，不能据此声称已重新核实全部型号或参数。其余目录与可读参数来源已重查；未用付费接口逐一实测。
 
 目录和具体 ID 保存在 [src/models.cjs](../src/models.cjs)，随脚本版本更新。服务商页面无法成功读取的部分会注明，不宣称全部型号均已核实或实测。
 

@@ -20,6 +20,7 @@
 [data-xxt-codex-panel] .xxt-state:before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent)}
 [data-xxt-codex-panel][data-sleeping=true] .xxt-state:before{background:#94a3b8}
 [data-xxt-codex-panel] pre{font:inherit!important;margin:0!important;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px!important;white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto;color:#475569}
+[data-xxt-codex-panel] .xxt-foreground-note{margin:10px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--tint);color:var(--ink);font-size:12px;line-height:1.7}
 [data-xxt-codex-panel] .xxt-settings{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;color:var(--muted);font-size:11px}
 [data-xxt-codex-panel] .xxt-rate-setting{display:flex;width:100%;justify-content:space-between;align-items:center}
 [data-xxt-codex-panel] input,[data-xxt-codex-panel] select{font:inherit;color:#334155;background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:7px;min-width:0}
@@ -162,6 +163,8 @@
         const body = make('div','xxt-body'), fold = make('button','xxt-fold'); fold.textContent = '−'; fold.title = '收起面板';
         fold.onclick = () => { body.hidden = !body.hidden; fold.textContent = body.hidden ? '+' : '−'; fold.title = body.hidden ? '展开面板' : '收起面板'; };
         const status = make('div','xxt-state'); status.textContent = '学习流程 · 多模型接入';
+        const foregroundNote = make('p','xxt-foreground-note');
+        foregroundNote.textContent = '建议将课程页保持在前台：选中课程标签，不最小化窗口，也不要让电脑休眠。后台运行可能使弹题处理或“继续学习”延迟。';
         const settings = make('div','xxt-settings'), rateLabel = make('label','xxt-rate-setting'), rate = document.createElement('select'); rate.dataset.setting = 'playback-rate'; rate.setAttribute('aria-label','视频倍速');
         for (const value of XxtCodexCore.playbackRates) { const option = document.createElement('option'); option.value = value; option.textContent = value === 1 ? '1×（建议）' : `${value}×`; rate.append(option); }
         rate.value = playbackRate; rate.onchange = () => onRateChange(Number(rate.value)); rateLabel.append(document.createTextNode('视频倍速'),rate);
@@ -186,7 +189,7 @@
         const authorNote = document.createElement('div'); authorNote.textContent = '脚本根据作者自己的实际使用需求编写，并持续完善。遇到暂不支持的场景，或有希望增加的功能，欢迎及时反馈；作者会第一时间跟进，评估后补充相应设置和功能。';
         feedbackCopy.append(authorNote,feedbackNote,privacyNote); feedbackDetails.append(feedbackSummary,feedbackCopy);
         feedback.append(feedbackLinks,feedbackDetails);
-        actions.className = 'xxt-actions'; body.append(actions,status,output,aiSettings(onAiChange),settings,details,XxtUpdates.create(),feedback); header.append(name,fold); shell.append(header,picker,body); panel.replaceChildren(shell,mascot);
+        actions.className = 'xxt-actions'; body.append(actions,status,output,foregroundNote,aiSettings(onAiChange),settings,details,XxtUpdates.create(),feedback); header.append(name,fold); shell.append(header,picker,body); panel.replaceChildren(shell,mascot);
         applySkin(GM_getValue('xxt-ui-skin','default'));
         let drag;
         header.onpointerdown = event => { if (event.button !== 0 || event.target.closest('button')) return; const r = panel.getBoundingClientRect(); drag = {x:event.clientX-r.left,y:event.clientY-r.top}; header.setPointerCapture(event.pointerId); event.preventDefault(); };

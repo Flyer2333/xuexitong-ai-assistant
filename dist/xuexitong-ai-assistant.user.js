@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         超星学习通自动化脚本（支持接入各种主流AI模型api）
 // @namespace    xuexitong-ai-assistant.public
-// @version      1.0.7
+// @version      1.0.8
 // @description  视频、文献与学习练习辅助；自配 AI API；不含任何密钥
 // @supportURL   https://github.com/Flyer2333/xuexitong-ai-assistant/issues
 // @match        https://*.chaoxing.com/*
@@ -1248,9 +1248,50 @@ const XxtThemeAssets = Object.freeze({"nailoong":"data:image/png;base64,iVBORw0K
     globalThis.XxtVideoQuiz = { find, across, extract, control, apply, selection, submitting, feedback, watchResponse };
 })();
 
+/* Official model catalog. Refresh sources and capabilities before every release. */
+(function (root) {
+    'use strict';
+    const verifiedAt = '2026-10-18', release = '1.0.8';
+    const rows = (ids, profile = '', vision = null) => ids.map(id => ({ id, profile, vision }));
+    const providers = {
+        openai: { sources: ['https://developers.openai.com/api/docs/models','https://developers.openai.com/api/docs/guides/latest-model'], models: rows(['gpt-6-astra','gpt-6.1-sol','gpt-6-sol'], 'openai', true).concat(rows(['gpt-6-luna'], 'openai-none', true)) },
+        claude: { sources: ['https://platform.claude.com/docs/en/models/overview','https://platform.claude.com/docs/en/build-with-claude/effort'], models: rows(['claude-fable-5-1','claude-opus-5-5','claude-sonnet-5-5','claude-haiku-5-5'], 'claude', true) },
+        gemini: { sources: ['https://ai.google.dev/gemini-api/docs/models','https://ai.google.dev/gemini-api/docs/thinking'], models: rows(['gemini-3.8-flash'], 'gemini', true).concat(rows(['gemini-3.7-flash','gemini-3.6-flash','gemini-3.5-flash-lite','gemini-3.1-pro-preview','gemini-3-flash-preview','gemini-2.5-pro','gemini-2.5-flash','gemini-2.5-flash-lite'], '', true)), note: '预览版可能变更；2.5 系列仅部分已有账号可用。' },
+        deepseek: { sources: ['https://api-docs.deepseek.com/zh-cn/','https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/'], models: rows(['deepseek-flash'], 'deepseek', true).concat(rows(['deepseek-v4-pro'], 'deepseek', false)) },
+        xiaomi: { sources: ['https://mimo.mi.com/docs/en-US/quick-start/model','https://mimo.mi.com/docs/zh-CN/api/chat/openai-api'], models: rows(['mimo-v2.6-pro','mimo-v2.6-flash','mimo-v2.6-pro-ultraspeed'], 'thinking', true), note: 'UltraSpeed 需相应权限；即将下线的 2.5 系列不列入快捷选项。' },
+        kimi: { sources: ['https://platform.kimi.com/docs/models','https://platform.kimi.com/docs/guide/use-thinking-models','https://platform.kimi.com/docs/guide/use-reasoning-effort'], models: rows(['kimi-k3'], 'effort-three', true).concat(rows(['kimi-k2.6'], 'thinking', true), rows(['kimi-k2.7-code','kimi-k2.7-code-highspeed'], '', true)), note: 'K3 和 K2.7 Code 始终思考；K2.6 可关闭思考。' },
+        zhipu: { sources: ['https://docs.bigmodel.cn/cn/guide/models','https://docs.z.ai/guides/llm/glm-5.3'], models: rows(['glm-5.3'], 'effort-three', false), note: '国内与国际平台的权限、套餐及上线范围可能不同。Flash/FlashX 的国内文档本次未成功读取，暂用手动输入并保留默认推理设置。' },
+        qwen: { sources: ['https://help.aliyun.com/zh/model-studio/models','https://help.aliyun.com/zh/model-studio/batch-inference','https://help.aliyun.com/zh/model-studio/deep-thinking/'], models: rows(['qwen3.8-max','qwen3.8-flash','qwen3.7-plus','qwen3.7-flash','qwen3.6-plus','qwen3.6-flash','qwen3.5-plus','qwen3.5-flash'], 'qwen', true).concat(rows(['qwen3.7-max'], 'qwen', null), rows(['qwen3-vl-plus','qwen3-vl-flash'], '', true)), note: '需匹配百炼地域和业务空间；第三方托管模型请手动填写。' },
+        doubao: { sources: ['https://docs.volcengine.com/docs/ark/model-list?lang=zh','https://docs.volcengine.com/docs/ark/deep-thinking?lang=zh'], models: rows(['doubao-seed-evolving','doubao-seed-2-1-pro-260915','doubao-seed-2-1-lite-260915','doubao-seed-2-1-pro-260628','doubao-seed-2-1-turbo-260628','doubao-seed-2-0-lite-260428'], 'thinking', true), note: '需先开通模型；专属 ep- 接入点请选择手动填写。这里只提供思考开关，不套用 Managed Agents 的强度参数。' },
+        siliconflow: { sources: ['https://docs.siliconflow.cn/docs/release-notes/overview','https://www.siliconflow.com/zh-tw/blog/glm-5.3-now-live-on-siliconflow'], models: rows(['zai-org/GLM-5.3'], 'effort-three', false).concat(rows(['deepseek-ai/DeepSeek-V4-Pro','deepseek-ai/DeepSeek-V3.2','Pro/deepseek-ai/DeepSeek-V3.2','Pro/moonshotai/Kimi-K2.6','Pro/zai-org/GLM-5.1','Qwen/Qwen3.6-27B','Qwen/Qwen3.6-35B-A3B'])), note: '聚合平台目录随时调整；国内/国际目录和权限可能不同，未列出的完整组织/模型 ID 可手动填写。' },
+        custom: { sources: [], models: [], note: '自建服务或中转站请填写该服务实际提供的模型 ID，并核对它支持的参数。' },
+        codex: { sources: [], models: [], note: '模型和推理强度由本地 Codex 服务配置，面板不覆盖 CLI 设置。' }
+    };
+    const levels = {
+        openai: ['low','medium','high','xhigh','max'], 'openai-none': ['none','low','medium','high','xhigh','max'],
+        claude: ['low','medium','high','xhigh','max'], gemini: ['low','medium','high'], deepseek: ['none','low','high','max'],
+        'effort-three': ['low','high','max'], thinking: ['enabled','disabled'], qwen: ['enabled','disabled'], generic: ['none','low','medium','high','xhigh','max']
+    };
+    const labels = {none:'关闭思考（none）',low:'低（low）',medium:'中（medium）',high:'高（high）',xhigh:'极高（xhigh）',max:'最高（max）',enabled:'开启思考',disabled:'关闭思考'};
+    function model(provider, id) { return providers[provider]?.models.find(item => item.id === id); }
+    function reasoningProfile(c) {
+        if (c.protocol === 'codex') return '';
+        // A different wire protocol is not evidence that a vendor accepts the same knobs.
+        const protocols = {openai:['chat','responses'],claude:['anthropic'],gemini:['gemini']};
+        if (c.provider === 'custom') return ['chat','responses'].includes(c.protocol) ? 'generic' : '';
+        if (!(protocols[c.provider] || ['chat']).includes(c.protocol)) return '';
+        return model(c.provider,c.model)?.profile || '';
+    }
+    function reasoningOptions(c) { return [['','使用模型默认值（建议）'], ...(levels[reasoningProfile(c)] || []).map(value => [value,labels[value]])]; }
+    const api = {verifiedAt,release,providers,levels,model,reasoningProfile,reasoningOptions};
+    if (typeof module === 'object' && module.exports) module.exports = api;
+    root.XxtModelCatalog = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
 /* Provider adapters: no bundled keys, no page storage, no telemetry. */
 (function (root) {
     'use strict';
+    const catalog = root.XxtModelCatalog || (typeof module === 'object' && module.exports ? require('./models.cjs') : null);
     const presets = {
         openai: { label: 'OpenAI', protocol: 'responses', baseUrl: 'https://api.openai.com/v1', vision: true },
         claude: { label: 'Claude / Anthropic', protocol: 'anthropic', baseUrl: 'https://api.anthropic.com/v1', vision: true },
@@ -1282,7 +1323,7 @@ const XxtThemeAssets = Object.freeze({"nailoong":"data:image/png;base64,iVBORw0K
         if (c.protocol === 'codex' && !/^[a-f0-9]{64}$/.test(c.key)) throw new Error('本地连接码应为 64 位十六进制字符');
         if (!Number.isInteger(Number(c.maxTokens)) || Number(c.maxTokens) < 256 || Number(c.maxTokens) > 32768) throw new Error('输出上限应为 256–32768 的整数');
         c.maxTokens = Number(c.maxTokens);
-        if (!['','low','medium','high','xhigh'].includes(c.reasoning)) throw new Error('推理强度无效');
+        if (!catalog.reasoningOptions(c).some(([value]) => value === c.reasoning)) throw new Error('当前模型或协议不支持此推理设置，请改用模型默认值');
         return c;
     }
     function prompt(payload, vision) {
@@ -1305,14 +1346,12 @@ const XxtThemeAssets = Object.freeze({"nailoong":"data:image/png;base64,iVBORw0K
             if (c.provider === 'xiaomi') { delete headers.Authorization; headers['api-key'] = c.key; }
             body = { model: c.model, messages: [{ role: 'user', content: images.length ? [{ type: 'text', text }, ...images.map(url => ({ type: 'image_url', image_url: { url } }))] : text }], stream: false };
             if (c.jsonMode) body.response_format = { type: 'json_object' };
-            if (c.reasoning) body.reasoning_effort = c.reasoning;
             // Modern OpenAI models use max_completion_tokens; generic vendors commonly use max_tokens.
             body[['openai','xiaomi'].includes(c.provider) ? 'max_completion_tokens' : 'max_tokens'] = limit;
         } else if (c.protocol === 'responses') {
             suffix = '/responses'; headers.Authorization = `Bearer ${c.key}`;
             body = { model: c.model, store: false, max_output_tokens: limit, input: [{ role: 'user', content: [{ type: 'input_text', text }, ...images.map(image_url => ({ type: 'input_image', image_url }))] }] };
             if (c.jsonMode) body.text = { format: { type: 'json_object' } };
-            if (c.reasoning) body.reasoning = { effort: c.reasoning };
         } else if (c.protocol === 'anthropic') {
             suffix = '/messages'; headers['x-api-key'] = c.key; headers['anthropic-version'] = '2023-06-01';
             headers['anthropic-dangerous-direct-browser-access'] = 'true';
@@ -1321,6 +1360,15 @@ const XxtThemeAssets = Object.freeze({"nailoong":"data:image/png;base64,iVBORw0K
             suffix = `/models/${encodeURIComponent(c.model.replace(/^models\//, ''))}:generateContent`; headers['x-goog-api-key'] = c.key;
             body = { contents: [{ role: 'user', parts: [{ text }, ...images.map(url => ({ inline_data: { mime_type: 'image/png', data: url.split(',')[1] } }))] }], generationConfig: { maxOutputTokens: limit } };
             if (c.jsonMode) body.generationConfig.responseMimeType = 'application/json';
+        }
+        if (c.reasoning) {
+            const profile = catalog.reasoningProfile(c), value = c.reasoning;
+            if (profile === 'thinking') body.thinking = { type: value };
+            else if (profile === 'qwen') body.enable_thinking = value === 'enabled';
+            else if (profile === 'claude') body.output_config = { effort: value };
+            else if (profile === 'gemini') body.generationConfig.thinkingConfig = { thinkingLevel: value };
+            else if (c.protocol === 'responses') body.reasoning = { effort: value };
+            else body.reasoning_effort = value;
         }
         if (/\/(chat\/completions|responses|messages)$|:generateContent$/.test(c.baseUrl)) throw new Error('请填写 Base URL，不要包含 chat/completions、responses 等具体接口路径');
         return { url: c.baseUrl + suffix, method: 'POST', headers, body, protocol: c.protocol };
@@ -1342,7 +1390,13 @@ const XxtThemeAssets = Object.freeze({"nailoong":"data:image/png;base64,iVBORw0K
         if (probe) { if (result.ok !== true) throw new Error('连接已响应，但模型没有按测试格式返回'); return { ok: true }; }
         return { answers: root.XxtCodexCore.validateAnswers(questions, result, { allowUncertain: true }) };
     }
-    const load = () => ({ ...defaults, ...GM_getValue('xxt-ai-config', {}) });
+    const load = () => {
+        const c = { ...defaults, ...GM_getValue('xxt-ai-config', {}) };
+        // Older releases offered the same values for every vendor. Keep the model/key,
+        // but do not forward a now-known incompatible legacy reasoning parameter.
+        if (!catalog.reasoningOptions(c).some(([value]) => value === c.reasoning)) c.reasoning = '';
+        return c;
+    };
     function request(path, payload) {
         let handle, settled = false, cancel;
         const promise = new Promise((resolve, reject) => {
@@ -1374,7 +1428,7 @@ const XxtThemeAssets = Object.freeze({"nailoong":"data:image/png;base64,iVBORw0K
         });
         return { promise, abort() { cancel?.(); } };
     }
-    const api = { presets, defaults, normalize, build, parse, load, request };
+    const api = { presets, defaults, normalize, build, parse, load, request, catalog };
     if (typeof module === 'object' && module.exports) module.exports = api;
     root.XxtAi = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
@@ -1454,18 +1508,51 @@ const XxtThemeAssets = Object.freeze({"nailoong":"data:image/png;base64,iVBORw0K
         field('provider','服务商',Object.entries(A.presets).map(([key,value]) => [key,value.label]));
         field('protocol','接口协议',[['chat','OpenAI Chat Completions'],['responses','OpenAI Responses'],['anthropic','Claude Messages'],['gemini','Gemini generateContent'],['codex','本地 Codex']]);
         field('baseUrl','Base URL（不带具体接口路径）');
-        field('model','模型 ID（从服务商控制台复制）');
+        const modelPicker = document.createElement('select'); modelPicker.dataset.aiModelPicker = 'true';
+        const modelLabel = document.createElement('label'); modelLabel.textContent = '模型'; modelLabel.append(modelPicker); form.append(modelLabel);
+        field('model','手动填写模型 ID'); fields.model.autocomplete = 'off'; fields.model.spellcheck = false;
+        const catalogNote = document.createElement('small'); catalogNote.dataset.aiCatalogNote = 'true'; form.append(catalogNote);
         field('key','API Key / 本地连接码'); fields.key.type = 'password'; fields.key.autocomplete = 'off';
         field('maxTokens','最大输出 token'); fields.maxTokens.type = 'number'; fields.maxTokens.min = '256'; fields.maxTokens.max = '32768';
-        field('reasoning','推理强度（仅 OpenAI 协议，默认不发送）',[['','使用模型默认值'],['low','low'],['medium','medium'],['high','high'],['xhigh','xhigh（仅支持的模型）']]);
+        field('reasoning','推理设置（按当前模型适配）',[]);
+        const reasoningNote = document.createElement('small'); reasoningNote.dataset.aiReasoningNote = 'true'; form.append(reasoningNote);
+        function updateReasoning(preferred = fields.reasoning.value) {
+            const c = {provider:fields.provider.value,protocol:fields.protocol.value,model:fields.model.value.trim()};
+            const options = A.catalog.reasoningOptions(c); fields.reasoning.replaceChildren();
+            for (const [value,text] of options) { const option = document.createElement('option'); option.value = value; option.textContent = text; fields.reasoning.append(option); }
+            fields.reasoning.value = options.some(([value]) => value === preferred) ? preferred : '';
+            fields.reasoning.disabled = options.length === 1;
+            reasoningNote.textContent = c.protocol === 'codex' ? '由本地 Codex 服务配置。' : options.length === 1 ? '此模型或协议尚未核实可调参数，沿用服务商默认值，不额外发送推理参数。' : c.provider === 'custom' ? '自定义接口：请自行确认服务是否支持所选强度。' : '仅显示已核实的参数；默认不额外发送设置。更高强度可能增加耗时和 token 消耗。';
+        }
+        function updateModelPicker(value = '') {
+            const provider = fields.provider.value, entry = A.catalog.providers[provider]; modelPicker.replaceChildren();
+            const append = (value,text) => { const option = document.createElement('option'); option.value = value; option.textContent = text; modelPicker.append(option); };
+            append('','请选择模型');
+            for (const item of entry.models) append(item.id,item.id + (item.vision === true ? ' · 支持图片' : item.vision === false ? ' · 仅文字' : ''));
+            append('__manual__','没有我要的模型，手动填写');
+            modelPicker.value = value && !entry.models.some(item => item.id === value) ? '__manual__' : value;
+            if (!entry.models.length && provider !== 'codex') modelPicker.value = '__manual__';
+            modelLabel.hidden = provider === 'codex'; fields.model.closest('label').hidden = modelPicker.value !== '__manual__' || provider === 'codex';
+            fields.model.value = value;
+            catalogNote.textContent = (provider === 'custom' || provider === 'codex' ? '' : `目录核对：${A.catalog.verifiedAt}。仅列适用的对话模型，实际可用性以账号权限为准。`) + (entry.note || '');
+        }
+        modelPicker.onchange = () => {
+            const manual = modelPicker.value === '__manual__'; fields.model.closest('label').hidden = !manual;
+            if (!manual) fields.model.value = modelPicker.value;
+            const item = A.catalog.model(fields.provider.value,fields.model.value);
+            if (item?.vision !== null && item?.vision !== undefined) fields.vision.checked = item.vision;
+            updateReasoning(''); if (manual) fields.model.focus();
+        };
+        fields.model.oninput = () => updateReasoning(); fields.protocol.onchange = () => updateReasoning('');
         for (const [key,label] of [['vision','发送题目截图（须选视觉模型）'],['jsonMode','发送 JSON 模式参数（须接口支持）']]) { field(key,label); fields[key].type = 'checkbox'; }
         const note = document.createElement('small'); note.textContent = 'API 按服务商用量计费。“测试 AI”会发送一条短请求。Key 保存在油猴存储，非加密保险箱；仅向你配置的 API 发送题目与截图。更换服务商或地址后必须重新输入 Key。';
         const message = document.createElement('small'); message.setAttribute('role','status');
         function populate() {
             const c = A.load();
             for (const [key,input] of Object.entries(fields)) { if (key === 'key') { input.value = ''; input.placeholder = c.key ? '已保存，留空保留（同一地址）' : '请输入你自己的密钥'; } else if (input.type === 'checkbox') input.checked = !!c[key]; else input.value = String(c[key] ?? ''); }
+            updateModelPicker(c.model); updateReasoning(c.reasoning);
         }
-        fields.provider.onchange = () => { const preset = A.presets[fields.provider.value]; fields.protocol.value = preset.protocol; fields.baseUrl.value = preset.baseUrl; fields.vision.checked = preset.vision; fields.model.value = ''; fields.key.value = ''; fields.key.placeholder = '请输入该服务商的密钥'; };
+        fields.provider.onchange = () => { const preset = A.presets[fields.provider.value]; fields.protocol.value = preset.protocol; fields.baseUrl.value = preset.baseUrl; fields.vision.checked = preset.vision; fields.key.value = ''; fields.key.placeholder = '请输入该服务商的密钥'; updateModelPicker(); updateReasoning(''); };
         const controls = document.createElement('div'); controls.className = 'ai-buttons';
         const save = document.createElement('button'); save.type = 'button'; save.textContent = '保存设置'; save.dataset.aiSave = 'true';
         save.onclick = () => {
@@ -1485,7 +1572,7 @@ const XxtThemeAssets = Object.freeze({"nailoong":"data:image/png;base64,iVBORw0K
         panel.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:2147483647;width:min(360px,calc(100vw - 36px));text-align:left';
         const make = (tag,cls) => { const el = document.createElement(tag); el.className = cls; return el; };
         const shell = make('div','xxt-shell'), header = make('header','xxt-head'), name = document.createElement('div');
-        const version = make('div','xxt-version'); version.textContent = 'LEARNING ASSISTANT · 1.0.7'; name.append(title,version);
+        const version = make('div','xxt-version'); version.textContent = 'LEARNING ASSISTANT · 1.0.8'; name.append(title,version);
         const picker = make('div','xxt-skin-picker'); picker.setAttribute('role','group'); picker.setAttribute('aria-label','外观主题');
         const pickerLabel = make('span','xxt-skin-label'); pickerLabel.textContent = '外观'; picker.append(pickerLabel);
         const mascot = make('div','xxt-theme-mascot'); mascot.setAttribute('aria-hidden','true'); mascot.hidden = true;

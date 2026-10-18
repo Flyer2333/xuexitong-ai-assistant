@@ -1,6 +1,6 @@
 # AI 服务商配置
 
-以下地址资料核对于 2026-10-15。先在服务商控制台创建 API Key，再复制账号可用的模型 ID 和接口地址。模型、地区和价格可能变化，请以控制台当前信息为准。脚本已用模拟请求测试协议，但尚未逐一验证真实账号和所有模型，也不提供服务商账号。
+模型目录与推理参数核对于 **2026-10-18**，逐家来源和未核实范围见[模型目录](MODELS.md)。先在服务商控制台创建 API Key，再在面板选择服务商和模型，核对自己的接口地址。模型、地区和价格可能变化，请以控制台当前信息为准。协议经过模拟测试，尚未逐一验证真实账号和所有模型。
 
 | 服务商 | 协议选择 | Base URL 示例 | 图片设置 |
 | --- | --- | --- | --- |
@@ -16,19 +16,19 @@
 | 硅基流动 | OpenAI Chat Completions | `https://api.siliconflow.cn/v1` | 按实际托管模型能力 |
 | 其他兼容服务 | 对应协议 | 厂商给出的基础地址 | 按模型能力 |
 
-模型 ID 请从控制台完整复制。脚本不会请求 `/models` 获取列表，也不会自动挑选或更换模型。使用转发站或自建网关前，请确认它可信且支持所选协议。
+模型下拉框使用随脚本发布的官方资料目录，显示准确 ID。没有所需型号时选“没有我要的模型，手动填写”，再完整复制控制台 ID；已有自定义 ID 保留。选择选项不会请求 `/models` 或产生 API 用量，脚本也不会自动换成另一个模型。使用转发站或自建网关前，请确认它可信且支持所选协议。
 
 ## OpenAI
 
 面板默认使用 Responses，也可以改选 Chat Completions。请按模型支持的协议选择；两种请求格式不能互换。
 
-Responses 使用 `input_text/input_image`，读取 output 中的 output_text，并设置 `store:false`；Chat Completions 使用 messages 和 image_url。两者都可以按设置发送 JSON 模式参数。推理强度默认不发送，手动选择前请确认模型支持，尤其是 `xhigh`。
+Responses 使用 `input_text/input_image`，读取 output 中的 output_text，并设置 `store:false`；Chat Completions 使用 messages 和 image_url。两者都可以按设置发送 JSON 模式参数。推理强度默认不发送，选项按当前目录中的模型适配；Luna 可选 none，Astra 不提供 none。
 
 依据：[Chat API](https://developers.openai.com/api/reference/resources/chat)、[Responses API](https://developers.openai.com/api/reference/resources/responses)。
 
 ## Claude
 
-选择“Claude Messages”，填写模型 ID 和自己的 API Key。脚本使用原生 `/v1/messages`，请求头包含 `x-api-key`、`anthropic-version: 2023-06-01`，图片以 base64 image block 发送。
+选择“Claude Messages”，选择模型并填写自己的 API Key。脚本使用原生 `/v1/messages`，请求头包含 `x-api-key`、`anthropic-version: 2023-06-01`，图片以 base64 image block 发送。目录中的当前模型使用 `output_config.effort`，不发送 OpenAI 的 reasoning 字段。
 
 浏览器直连还会声明 direct-browser-access。Key 保存在自己的浏览器中，项目没有代管密钥的服务器。使用网关或旧版接口时，需要另外确认支持范围。
 
@@ -38,7 +38,7 @@ Responses 使用 `input_text/input_image`，读取 output 中的 output_text，�
 
 选择“Gemini generateContent”，填写模型 ID 和 API Key。请求使用原生 `/models/{model}:generateContent`，图片放在 parts 的 inline_data 中，Key 通过 `x-goog-api-key` 请求头发送。
 
-开启 JSON 模式时会设置 responseMimeType。脚本只读取最终文本，不把 thought 段当答案；响应被拦截或没有可用文本时停止。
+开启 JSON 模式时会设置 responseMimeType。Gemini 3.8 Flash 可选 low/medium/high，通过原生 thinkingConfig 发送；其他尚未核实的型号沿用默认推理设置。脚本只读取最终文本，不把 thought 段当答案；响应被拦截或没有可用文本时停止。
 
 依据：[Gemini generateContent](https://ai.google.dev/api/generate-content)。
 
@@ -52,14 +52,14 @@ DeepSeek 选择 OpenAI Chat Completions。图片输入、JSON 和推理参数是
 
 ## 小米 MiMo、Kimi、智谱与硅基流动
 
-这四家都可以在服务商下拉框直接选择。选好后仍需填写模型 ID，并核对账号套餐、接口区域及图片能力。
+这四家都可以在服务商下拉框直接选择，然后选择模型或手动填写完整 ID，并核对账号套餐、接口区域及图片能力。推理设置按型号适配：小米 V2.6 为思考开关，Kimi K3 为 low/high/max，K2.6 为思考开关，GLM-5.3 始终思考、可选 low/high/max。硅基流动的参数按托管部署核实，不照搬原厂。
 
 - **小米 MiMo**：预设使用按量接口 `https://api.xiaomimimo.com/v1`；鉴权使用 `api-key`，输出上限字段使用 `max_completion_tokens`。小米也接受 Bearer，但脚本使用官方示例中的请求头。Token Plan 的 Key 与按量 Key/地址不同，不要混用；具体用途仍受套餐规则限制。若使用另一个套餐地址，应先核对套餐允许的用途，再改 Base URL 并重新填 Key。依据：[小米官方 API 接入](https://mimo.mi.com/docs/zh-CN/quick-start/faq/api-integration)。
 - **Kimi / Moonshot**：预设国内兼容地址；模型是否支持视觉、使用哪个区域/域名，以控制台和当前文档为准。API 文档可能重定向到新的 Kimi 平台域名，不要把文档域名当调用地址。依据：[Kimi Chat Completions](https://platform.moonshot.cn/docs/api/chat)。
 - **智谱 GLM**：预设通用 `/api/paas/v4`；普通按量 API 与 Coding 专属端点不是同一用途。Bearer Key 从自己的控制台获取。依据：[智谱快速开始](https://docs.bigmodel.cn/cn/api/introduction)。
 - **硅基流动**：预设兼容地址，模型名常包含组织/厂商前缀，应复制完整 ID。聚合平台提供模型不等于该平台的每个模型都支持图片。依据：[硅基流动 Chat Completions](https://docs.siliconflow.cn/docs/api/chat-completions-post)。
 
-其他 OpenAI 兼容服务或电脑上的推理服务，可选择“自定义”，手动填写协议和地址。模型 ID 由用户填写；项目没有固定模型列表，也尚未逐家完成账号实测。
+其他 OpenAI 兼容服务或电脑上的推理服务，可选择“自定义”，手动填写协议、地址和模型 ID；推理参数由用户确认网关支持范围。目录与参数会随脚本更新，但不保证涵盖每个套餐或地区，也尚未逐家完成账号实测。
 
 ## 费用与图文
 

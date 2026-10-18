@@ -6,6 +6,10 @@
 
 ## 发布前检查
 
+每次更新（包括补丁和文档版本发布）先联网重查全部服务商官方模型目录、发布/下线公告及推理参数，更新 `src/models.cjs` 的 ID、模型能力、`verifiedAt` 与 `release`，并维护 [核查来源](MODELS.md)。读取失败的部分如实注明，不能仅更新日期充当核查。聚合平台使用自己的完整 ID 和参数范围，不照搬原厂。
+
+执行 `npm run check:models -- --release` 核对目录与当前版本、发布日期；普通 `npm test` 也会检查版本一致性。检查器只能发现目录结构和版本遗漏，不能代替联网检索，也不会自动认定网页上的任何字符串都是可用模型。
+
 1. 阅读根目录 `NOTICE.md`。上游再分发许可尚待确认，公开再分发前需核对许可范围或取得授权。
 2. 在干净的项目目录运行 `npm run build` 和 `npm test`。
 3. 检查待提交文件，排除 `src/local/`、`.env`、日志、浏览器用户数据、Key、连接码和课程私有 URL。需要提交 `dist` 中的安装脚本；它不包含用户配置。
@@ -30,7 +34,7 @@ git init
 git add .
 git status --short
 git diff --cached --stat
-git commit -m "Prepare public AI assistant 1.0.7"
+git commit -m "Prepare public AI assistant 1.0.8"
 git branch -M main
 git remote add origin https://github.com/YOUR_NAME/xuexitong-ai-assistant.git
 git push -u origin main
@@ -51,7 +55,7 @@ https://raw.githubusercontent.com/YOUR_NAME/xuexitong-ai-assistant/main/dist/xue
 ## 发布 Release
 
 1. 仓库 **Releases → Draft a new release**。
-2. 创建标签 `v1.0.7`，标题“超星学习通自动化脚本（支持接入各种主流AI模型api） 1.0.7”。
+2. 创建标签 `v1.0.8`，标题“超星学习通自动化脚本（支持接入各种主流AI模型api） 1.0.8”。
 3. 写明此次变化、支持的协议、测试范围、API 费用及来源许可情况。
 4. 上传 `dist/xuexitong-ai-assistant.user.js` 作为可安装附件；源码由 GitHub 自动生成 ZIP。
 5. 核对附件版本与标签一致，确认没有预填 Key，再发布。供用户安装的附件应为 `.user.js`；源码 ZIP 不能通过油猴的备份导入功能安装。

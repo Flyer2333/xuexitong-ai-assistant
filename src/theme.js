@@ -73,18 +73,51 @@
         field('provider','服务商',Object.entries(A.presets).map(([key,value]) => [key,value.label]));
         field('protocol','接口协议',[['chat','OpenAI Chat Completions'],['responses','OpenAI Responses'],['anthropic','Claude Messages'],['gemini','Gemini generateContent'],['codex','本地 Codex']]);
         field('baseUrl','Base URL（不带具体接口路径）');
-        field('model','模型 ID（从服务商控制台复制）');
+        const modelPicker = document.createElement('select'); modelPicker.dataset.aiModelPicker = 'true';
+        const modelLabel = document.createElement('label'); modelLabel.textContent = '模型'; modelLabel.append(modelPicker); form.append(modelLabel);
+        field('model','手动填写模型 ID'); fields.model.autocomplete = 'off'; fields.model.spellcheck = false;
+        const catalogNote = document.createElement('small'); catalogNote.dataset.aiCatalogNote = 'true'; form.append(catalogNote);
         field('key','API Key / 本地连接码'); fields.key.type = 'password'; fields.key.autocomplete = 'off';
         field('maxTokens','最大输出 token'); fields.maxTokens.type = 'number'; fields.maxTokens.min = '256'; fields.maxTokens.max = '32768';
-        field('reasoning','推理强度（仅 OpenAI 协议，默认不发送）',[['','使用模型默认值'],['low','low'],['medium','medium'],['high','high'],['xhigh','xhigh（仅支持的模型）']]);
+        field('reasoning','推理设置（按当前模型适配）',[]);
+        const reasoningNote = document.createElement('small'); reasoningNote.dataset.aiReasoningNote = 'true'; form.append(reasoningNote);
+        function updateReasoning(preferred = fields.reasoning.value) {
+            const c = {provider:fields.provider.value,protocol:fields.protocol.value,model:fields.model.value.trim()};
+            const options = A.catalog.reasoningOptions(c); fields.reasoning.replaceChildren();
+            for (const [value,text] of options) { const option = document.createElement('option'); option.value = value; option.textContent = text; fields.reasoning.append(option); }
+            fields.reasoning.value = options.some(([value]) => value === preferred) ? preferred : '';
+            fields.reasoning.disabled = options.length === 1;
+            reasoningNote.textContent = c.protocol === 'codex' ? '由本地 Codex 服务配置。' : options.length === 1 ? '此模型或协议尚未核实可调参数，沿用服务商默认值，不额外发送推理参数。' : c.provider === 'custom' ? '自定义接口：请自行确认服务是否支持所选强度。' : '仅显示已核实的参数；默认不额外发送设置。更高强度可能增加耗时和 token 消耗。';
+        }
+        function updateModelPicker(value = '') {
+            const provider = fields.provider.value, entry = A.catalog.providers[provider]; modelPicker.replaceChildren();
+            const append = (value,text) => { const option = document.createElement('option'); option.value = value; option.textContent = text; modelPicker.append(option); };
+            append('','请选择模型');
+            for (const item of entry.models) append(item.id,item.id + (item.vision === true ? ' · 支持图片' : item.vision === false ? ' · 仅文字' : ''));
+            append('__manual__','没有我要的模型，手动填写');
+            modelPicker.value = value && !entry.models.some(item => item.id === value) ? '__manual__' : value;
+            if (!entry.models.length && provider !== 'codex') modelPicker.value = '__manual__';
+            modelLabel.hidden = provider === 'codex'; fields.model.closest('label').hidden = modelPicker.value !== '__manual__' || provider === 'codex';
+            fields.model.value = value;
+            catalogNote.textContent = (provider === 'custom' || provider === 'codex' ? '' : `目录核对：${A.catalog.verifiedAt}。仅列适用的对话模型，实际可用性以账号权限为准。`) + (entry.note || '');
+        }
+        modelPicker.onchange = () => {
+            const manual = modelPicker.value === '__manual__'; fields.model.closest('label').hidden = !manual;
+            if (!manual) fields.model.value = modelPicker.value;
+            const item = A.catalog.model(fields.provider.value,fields.model.value);
+            if (item?.vision !== null && item?.vision !== undefined) fields.vision.checked = item.vision;
+            updateReasoning(''); if (manual) fields.model.focus();
+        };
+        fields.model.oninput = () => updateReasoning(); fields.protocol.onchange = () => updateReasoning('');
         for (const [key,label] of [['vision','发送题目截图（须选视觉模型）'],['jsonMode','发送 JSON 模式参数（须接口支持）']]) { field(key,label); fields[key].type = 'checkbox'; }
         const note = document.createElement('small'); note.textContent = 'API 按服务商用量计费。“测试 AI”会发送一条短请求。Key 保存在油猴存储，非加密保险箱；仅向你配置的 API 发送题目与截图。更换服务商或地址后必须重新输入 Key。';
         const message = document.createElement('small'); message.setAttribute('role','status');
         function populate() {
             const c = A.load();
             for (const [key,input] of Object.entries(fields)) { if (key === 'key') { input.value = ''; input.placeholder = c.key ? '已保存，留空保留（同一地址）' : '请输入你自己的密钥'; } else if (input.type === 'checkbox') input.checked = !!c[key]; else input.value = String(c[key] ?? ''); }
+            updateModelPicker(c.model); updateReasoning(c.reasoning);
         }
-        fields.provider.onchange = () => { const preset = A.presets[fields.provider.value]; fields.protocol.value = preset.protocol; fields.baseUrl.value = preset.baseUrl; fields.vision.checked = preset.vision; fields.model.value = ''; fields.key.value = ''; fields.key.placeholder = '请输入该服务商的密钥'; };
+        fields.provider.onchange = () => { const preset = A.presets[fields.provider.value]; fields.protocol.value = preset.protocol; fields.baseUrl.value = preset.baseUrl; fields.vision.checked = preset.vision; fields.key.value = ''; fields.key.placeholder = '请输入该服务商的密钥'; updateModelPicker(); updateReasoning(''); };
         const controls = document.createElement('div'); controls.className = 'ai-buttons';
         const save = document.createElement('button'); save.type = 'button'; save.textContent = '保存设置'; save.dataset.aiSave = 'true';
         save.onclick = () => {
@@ -104,7 +137,7 @@
         panel.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:2147483647;width:min(360px,calc(100vw - 36px));text-align:left';
         const make = (tag,cls) => { const el = document.createElement(tag); el.className = cls; return el; };
         const shell = make('div','xxt-shell'), header = make('header','xxt-head'), name = document.createElement('div');
-        const version = make('div','xxt-version'); version.textContent = 'LEARNING ASSISTANT · 1.0.7'; name.append(title,version);
+        const version = make('div','xxt-version'); version.textContent = 'LEARNING ASSISTANT · 1.0.8'; name.append(title,version);
         const picker = make('div','xxt-skin-picker'); picker.setAttribute('role','group'); picker.setAttribute('aria-label','外观主题');
         const pickerLabel = make('span','xxt-skin-label'); pickerLabel.textContent = '外观'; picker.append(pickerLabel);
         const mascot = make('div','xxt-theme-mascot'); mascot.setAttribute('aria-hidden','true'); mascot.hidden = true;

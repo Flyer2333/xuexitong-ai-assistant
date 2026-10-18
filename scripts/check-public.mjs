@@ -20,7 +20,7 @@ for(const path of paths){
 }
 const script=readFileSync(resolve(root,'dist/xuexitong-ai-assistant.user.js'),'utf8');
 assert(script.includes(themeAssetCode()),'Stale theme assets');
-for(const name of ['core.cjs','retry.cjs','dom.js','capture.js','documents.js','reading.js','page-tasks.js','interruptions.js','video-quiz.js','ai.js','theme.js','workflow.js','player.js'])assert(script.includes(readFileSync(resolve(root,'src',name),'utf8')),`Stale build: ${name}`);
+for(const name of ['core.cjs','retry.cjs','dom.js','capture.js','documents.js','reading.js','page-tasks.js','interruptions.js','video-quiz.js','models.cjs','ai.js','theme.js','workflow.js','player.js'])assert(script.includes(readFileSync(resolve(root,'src',name),'utf8')),`Stale build: ${name}`);
 const {version}=JSON.parse(readFileSync(resolve(root,'package.json'),'utf8'));
 assert(script.includes(`@version      ${version}`));assert(script.includes('@connect      *'));
 console.log(`Public build checked: ${paths.length} files, source sync and JavaScript syntax; theme assets hash-verified; no known personal paths or paired credentials.`);

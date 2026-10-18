@@ -1,6 +1,7 @@
 /* Provider adapters: no bundled keys, no page storage, no telemetry. */
 (function (root) {
     'use strict';
+    const catalog = root.XxtModelCatalog || (typeof module === 'object' && module.exports ? require('./models.cjs') : null);
     const presets = {
         openai: { label: 'OpenAI', protocol: 'responses', baseUrl: 'https://api.openai.com/v1', vision: true },
         claude: { label: 'Claude / Anthropic', protocol: 'anthropic', baseUrl: 'https://api.anthropic.com/v1', vision: true },
@@ -32,7 +33,7 @@
         if (c.protocol === 'codex' && !/^[a-f0-9]{64}$/.test(c.key)) throw new Error('本地连接码应为 64 位十六进制字符');
         if (!Number.isInteger(Number(c.maxTokens)) || Number(c.maxTokens) < 256 || Number(c.maxTokens) > 32768) throw new Error('输出上限应为 256–32768 的整数');
         c.maxTokens = Number(c.maxTokens);
-        if (!['','low','medium','high','xhigh'].includes(c.reasoning)) throw new Error('推理强度无效');
+        if (!catalog.reasoningOptions(c).some(([value]) => value === c.reasoning)) throw new Error('当前模型或协议不支持此推理设置，请改用模型默认值');
         return c;
     }
     function prompt(payload, vision) {
@@ -55,14 +56,12 @@
             if (c.provider === 'xiaomi') { delete headers.Authorization; headers['api-key'] = c.key; }
             body = { model: c.model, messages: [{ role: 'user', content: images.length ? [{ type: 'text', text }, ...images.map(url => ({ type: 'image_url', image_url: { url } }))] : text }], stream: false };
             if (c.jsonMode) body.response_format = { type: 'json_object' };
-            if (c.reasoning) body.reasoning_effort = c.reasoning;
             // Modern OpenAI models use max_completion_tokens; generic vendors commonly use max_tokens.
             body[['openai','xiaomi'].includes(c.provider) ? 'max_completion_tokens' : 'max_tokens'] = limit;
         } else if (c.protocol === 'responses') {
             suffix = '/responses'; headers.Authorization = `Bearer ${c.key}`;
             body = { model: c.model, store: false, max_output_tokens: limit, input: [{ role: 'user', content: [{ type: 'input_text', text }, ...images.map(image_url => ({ type: 'input_image', image_url }))] }] };
             if (c.jsonMode) body.text = { format: { type: 'json_object' } };
-            if (c.reasoning) body.reasoning = { effort: c.reasoning };
         } else if (c.protocol === 'anthropic') {
             suffix = '/messages'; headers['x-api-key'] = c.key; headers['anthropic-version'] = '2023-06-01';
             headers['anthropic-dangerous-direct-browser-access'] = 'true';
@@ -71,6 +70,15 @@
             suffix = `/models/${encodeURIComponent(c.model.replace(/^models\//, ''))}:generateContent`; headers['x-goog-api-key'] = c.key;
             body = { contents: [{ role: 'user', parts: [{ text }, ...images.map(url => ({ inline_data: { mime_type: 'image/png', data: url.split(',')[1] } }))] }], generationConfig: { maxOutputTokens: limit } };
             if (c.jsonMode) body.generationConfig.responseMimeType = 'application/json';
+        }
+        if (c.reasoning) {
+            const profile = catalog.reasoningProfile(c), value = c.reasoning;
+            if (profile === 'thinking') body.thinking = { type: value };
+            else if (profile === 'qwen') body.enable_thinking = value === 'enabled';
+            else if (profile === 'claude') body.output_config = { effort: value };
+            else if (profile === 'gemini') body.generationConfig.thinkingConfig = { thinkingLevel: value };
+            else if (c.protocol === 'responses') body.reasoning = { effort: value };
+            else body.reasoning_effort = value;
         }
         if (/\/(chat\/completions|responses|messages)$|:generateContent$/.test(c.baseUrl)) throw new Error('请填写 Base URL，不要包含 chat/completions、responses 等具体接口路径');
         return { url: c.baseUrl + suffix, method: 'POST', headers, body, protocol: c.protocol };
@@ -92,7 +100,13 @@
         if (probe) { if (result.ok !== true) throw new Error('连接已响应，但模型没有按测试格式返回'); return { ok: true }; }
         return { answers: root.XxtCodexCore.validateAnswers(questions, result, { allowUncertain: true }) };
     }
-    const load = () => ({ ...defaults, ...GM_getValue('xxt-ai-config', {}) });
+    const load = () => {
+        const c = { ...defaults, ...GM_getValue('xxt-ai-config', {}) };
+        // Older releases offered the same values for every vendor. Keep the model/key,
+        // but do not forward a now-known incompatible legacy reasoning parameter.
+        if (!catalog.reasoningOptions(c).some(([value]) => value === c.reasoning)) c.reasoning = '';
+        return c;
+    };
     function request(path, payload) {
         let handle, settled = false, cancel;
         const promise = new Promise((resolve, reject) => {
@@ -124,7 +138,7 @@
         });
         return { promise, abort() { cancel?.(); } };
     }
-    const api = { presets, defaults, normalize, build, parse, load, request };
+    const api = { presets, defaults, normalize, build, parse, load, request, catalog };
     if (typeof module === 'object' && module.exports) module.exports = api;
     root.XxtAi = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

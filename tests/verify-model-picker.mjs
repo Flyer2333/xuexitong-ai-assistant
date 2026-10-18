@@ -1,0 +1,54 @@
+import {readFile,mkdir,writeFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import assert from 'node:assert/strict';
+import {chromium} from './browser-runtime.mjs';
+const root=resolve(import.meta.dirname,'..'),out=resolve(root,'artifacts/model-picker'); await mkdir(out,{recursive:true});
+const bundle=await readFile(resolve(root,'dist/xuexitong-ai-assistant.user.js'),'utf8');
+const browser=await chromium.launchPersistentContext(resolve(out,'profile'),{channel:process.env.XXT_BROWSER_CHANNEL||'chrome',headless:true,viewport:{width:1100,height:1000}});
+const page=await browser.newPage();
+await page.route('**/*',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<style>body{background:#eef2f8}</style><div id="coursetree"><div class="posCatalog_active"><span class="posCatalog_name">界面验证</span></div></div>'}));
+await page.addInitScript(()=>{
+ window.unsafeWindow=window; window.__requests=[]; window.__gm=JSON.parse(sessionStorage.getItem('models-test-store')||'{}');
+ window.GM_getValue=(k,f)=>window.__gm[k]??f;
+ window.GM_setValue=(k,v)=>{window.__gm[k]=structuredClone(v);sessionStorage.setItem('models-test-store',JSON.stringify(window.__gm));};
+ window.GM_xmlhttpRequest=spec=>{window.__requests.push(JSON.parse(spec.data||'{}'));setTimeout(()=>spec.onload({status:200,responseText:JSON.stringify({choices:[{message:{content:'{"ok":true}'}}]})}),0);return {abort(){}};};
+});
+const observations=[];
+try {
+ await page.goto('https://mooc1.chaoxing.com/mycourse/studentstudy?courseId=model-fixture'); await page.addScriptTag({content:bundle});
+ const settings=page.locator('[data-ai-settings]'),provider=settings.locator('[data-ai-field=provider]'),picker=settings.locator('[data-ai-model-picker]'),manual=settings.locator('[data-ai-field=model]'),reasoning=settings.locator('[data-ai-field=reasoning]');
+ await settings.locator('summary').click();
+ for(const p of ['openai','claude','gemini','deepseek','xiaomi','kimi','zhipu','qwen','doubao','siliconflow']) {
+   await provider.selectOption(p); assert((await picker.locator('option').count())>2,p); assert.equal(await picker.inputValue(),''); assert.equal(await manual.isVisible(),false);
+   assert(await picker.locator('option[value="__manual__"]').count());
+   observations.push({provider:p,count:(await picker.locator('option').count())-2});
+ }
+ assert.equal(await page.evaluate(()=>window.__requests.length),0,'Selecting models must not contact APIs');
+ await provider.selectOption('deepseek'); await picker.selectOption('deepseek-flash');
+ assert.deepEqual(await reasoning.locator('option').evaluateAll(list=>list.map(x=>x.value)),['','none','low','high','max']);
+ await reasoning.selectOption('max'); await settings.locator('[data-ai-field=key]').fill('fixture-key'); await settings.locator('[data-ai-save]').click();
+ assert.equal(await picker.inputValue(),'deepseek-flash'); assert.equal(await manual.isVisible(),false); assert.equal(await reasoning.inputValue(),'max');
+ await page.locator('[data-action=connect]').click(); await page.waitForFunction(()=>document.querySelector('pre').textContent.includes('连接测试通过'));
+ assert.equal(await page.evaluate(()=>window.__requests[0].reasoning_effort),'max');
+ await picker.selectOption('__manual__'); assert(await manual.isVisible()); await manual.fill('my-account-model');
+ assert.equal(await reasoning.isDisabled(),true); assert.equal(await reasoning.inputValue(),'');
+ await settings.locator('[data-ai-save]').click(); assert.equal(await picker.inputValue(),'__manual__');
+ await page.reload(); await page.addScriptTag({content:bundle}); await settings.locator('summary').click();
+ assert.equal(await manual.inputValue(),'my-account-model'); assert.equal(await picker.inputValue(),'__manual__'); assert(await manual.isVisible());
+ await provider.selectOption('kimi'); await picker.selectOption('kimi-k3'); await reasoning.selectOption('high');
+ await picker.selectOption('kimi-k2.6'); assert.equal(await reasoning.inputValue(),'');
+ assert.deepEqual(await reasoning.locator('option').evaluateAll(list=>list.map(x=>x.value)),['','enabled','disabled']);
+ await picker.selectOption('kimi-k2.7-code'); assert(await reasoning.isDisabled());
+ await provider.selectOption('claude'); await picker.selectOption('claude-opus-5-5'); assert(await reasoning.locator('option[value=xhigh]').count());
+ await settings.locator('[data-ai-field=protocol]').selectOption('chat'); assert(await reasoning.isDisabled());
+ await provider.selectOption('codex'); assert.equal(await picker.isVisible(),false); assert.equal(await manual.isVisible(),false); assert(await reasoning.isDisabled());
+ await provider.selectOption('custom'); assert(await manual.isVisible()); await manual.fill('ep-customer-model');
+ await provider.selectOption('deepseek'); await picker.selectOption('deepseek-flash');
+ await page.locator('[data-xxt-codex-panel]').screenshot({path:resolve(out,'model-settings.png')});
+ await page.setViewportSize({width:390,height:900});
+ const panel=page.locator('[data-xxt-codex-panel]'); const rect=await panel.boundingBox(); assert(rect.x>=0 && rect.x+rect.width<=390);
+ assert.equal(await settings.evaluate(el=>el.scrollWidth<=el.clientWidth),true,'Settings overflow at narrow width');
+ await panel.screenshot({path:resolve(out,'model-settings-mobile.png')});
+ await writeFile(resolve(out,'observations.json'),JSON.stringify({providers:observations,passed:['no API on selection','exact ID and wire parameter','custom ID save/reload','model/protocol switch clears invalid effort','always-on models','Codex server ownership','390px layout']},null,2));
+ console.log('Model picker browser checks passed for all 10 providers, exact request field, manual persistence, reasoning isolation, Codex, and narrow layout. Synthetic API only.');
+} finally {await browser.close();}

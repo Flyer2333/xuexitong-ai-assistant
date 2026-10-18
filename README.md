@@ -42,7 +42,7 @@
 
 用于学习通课程页面的浏览器用户脚本，支持视频播放、文献预览和 AI 辅助答题。可接入国内外多家 AI 服务，也可以连接电脑上的 Codex。使用前需要配置自己的 API Key 或 Codex 连接码。当前版本：**1.0.7**。
 
-[安装脚本（Raw）](https://raw.githubusercontent.com/Flyer2333/xuexitong-ai-assistant/main/dist/xuexitong-ai-assistant.user.js) · [完整功能说明](docs/FEATURES.md) · [安装教程](docs/INSTALL.md) · [模型配置](docs/PROVIDERS.md) · [问题反馈](https://github.com/Flyer2333/xuexitong-ai-assistant/issues)
+[下载 ZIP](https://github.com/Flyer2333/xuexitong-ai-assistant/archive/refs/heads/main.zip) · [直接安装（Raw，可选）](https://raw.githubusercontent.com/Flyer2333/xuexitong-ai-assistant/main/dist/xuexitong-ai-assistant.user.js) · [完整功能说明](docs/FEATURES.md) · [安装教程](docs/INSTALL.md) · [模型配置](docs/PROVIDERS.md) · [问题反馈](https://github.com/Flyer2333/xuexitong-ai-assistant/issues)
 
 第一次使用可先看 **[完整功能说明](docs/FEATURES.md)**，了解按钮怎么用、脚本按什么顺序运行，以及重做、随机填写和暂停的条件。接口出错、图片加载失败或平台状态不明确时，脚本会暂停，需要手动处理。
 
@@ -51,10 +51,13 @@
 ## 快速开始
 
 1. 在 Chrome 或 Edge 中安装 [Tampermonkey](https://www.tampermonkey.net/)（油猴），按浏览器提示允许用户脚本运行。
-2. 打开仓库中的 `dist/xuexitong-ai-assistant.user.js`，点击 **Raw** 安装。若没有出现安装页，在油猴中选择“添加新脚本”，粘贴 Raw 页的全部代码并保存；不要复制 GitHub 网页本身的 HTML。
-3. 停用其他控制同一课程页的脚本，刷新页面，确认右下角出现面板。
-4. 展开 **AI 接口设置**，选择服务商，填写控制台提供的 Base URL、模型 ID 和自己的 API Key。需要识别图片时，选择支持图片输入的模型并勾选截图。
-5. 点击 **保存设置 → 测试 AI**。测试会发送一条短请求，可能计费；连接成功后点击 **开始自动**。
+2. 点击 **[下载 ZIP](https://github.com/Flyer2333/xuexitong-ai-assistant/archive/refs/heads/main.zip)** 并解压，进入 `dist` 文件夹。右键 `xuexitong-ai-assistant.user.js` → **打开方式 → 记事本**，按 `Ctrl+A`、`Ctrl+C` 复制全部代码。
+3. 点击油猴图标 → **添加新脚本**，按 `Ctrl+A` 删除默认代码，再按 `Ctrl+V` 粘贴、`Ctrl+S` 保存。确认油猴列表中的脚本版本为 **1.0.7**。
+4. 停用其他控制同一课程页的脚本，刷新页面，确认右下角出现面板。
+5. 展开 **AI 接口设置**，选择服务商，填写控制台提供的 Base URL、模型 ID 和自己的 API Key。需要识别图片时，选择支持图片输入的模型并勾选截图。
+6. 点击 **保存设置 → 测试 AI**。测试会发送一条短请求，可能计费；连接成功后点击 **开始自动**。
+
+也可以点击 **直接安装（Raw，可选）**，在油猴弹出的安装页确认安装。如果一直停在 `tampermonkey.net/script_installation.php`，请改用上面的 ZIP 方法；该中转页不含脚本代码。仓库 ZIP 是源码包，需要解压后复制 `.user.js`，不能当作油猴备份 ZIP 导入。
 
 使用 API 时，只需配置浏览器脚本。想使用电脑上的 Codex，可按 [安装教程](docs/INSTALL.md) 启动连接服务；该方式需要 Node.js 和 Codex CLI。
 
@@ -160,7 +163,7 @@ npm run test:themes
 
 | 更新时间 | 版本 | 更新类型 | 更新内容 |
 | --- | --- | --- | --- |
-| 2026-10-18 | 1.0.7 | Bug 修复、运行接续 | 修复后续视频弹题漏识别、任务点变绿后提前切视频和状态提示不准确；同标签同课程刷新后可接续已开启的自动运行，停止或报错取消接续。 |
+| 2026-10-18 | 1.0.7 | Bug 修复、运行接续 | 修复后续视频弹题漏识别、任务点变绿后提前切视频和状态提示不准确；同标签同课程刷新后可接续已开启的自动运行，停止或报错取消接续；可下载 ZIP 后手动安装，避免卡在 Raw 安装中转页。 |
 | 2026-10-17 | 1.0.6 | 流程改进、Bug 修复 | 同页多个视频逐个播放，文献、专题与测验依次处理；本章各学习步骤完成后才切章。修复嵌套文献重复打开；无法确认完成的任务会暂停。 |
 | 2026-10-17 | 1.0.5 | 新增外观、界面改进 | 新增默认、奶龙、奶蛙三款可保存皮肤；标题精简为“学习助手”，奶蛙使用透明图；反馈详情默认折叠。 |
 | 2026-10-16 | 1.0.4 | 新增功能、Bug 修复 | 新增专题目录阅读，每项累计前台停留90秒；改进嵌套文档滚动，修复旧提交状态导致空等；允许时可按反馈重答视频弹题。 |

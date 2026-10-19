@@ -10,6 +10,7 @@
     const I = XxtCodexInterruptions;
     const Q = XxtVideoQuiz;
     const P = globalThis.XxtPageTasks;
+    const videoLines = globalThis.XxtVideoLines?.create();
     const nonce = crypto.randomUUID();
     const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
     const isTop = pageWindow === pageWindow.top;
@@ -412,6 +413,7 @@
             if (pending.video) {
                 pageBlockedAt = 0;
                 const video = pending.video;
+                if (await recoverVideoLine(video, `${task}/${currentCard}`)) return true;
                 startedVideos.add(video);
                 if (pageVideo !== video) {
                     pageVideo?.pause(); window.app?._detachVideoEvents?.();
@@ -474,6 +476,20 @@
             await advanceCourse('已处理可识别任务，其余已记录待复核'); return true;
         }
         return false;
+    }
+    async function recoverVideoLine(video, context) {
+        const result = videoLines?.step(video, context, () => {
+            if (!automatic || stopped || quietNow() || Q.find(video.ownerDocument)) throw new Error('自动操作已暂停，取消视频切线');
+        });
+        if (!result) return false;
+        if (result.failed) throw new Error(result.message);
+        if (coursePage()) notify(result.message);
+        else report('status', { task: remoteVideoTask, value: result.message });
+        if (result.resume) {
+            applyMediaRate(video);
+            try { await video.play(); } catch {}
+        }
+        return !result.recovered;
     }
     function transitionBlocked(includeChecks = false) {
         const view = pageInventory();
@@ -1232,7 +1248,7 @@
         } catch (error) { pause(error.message); }
         finally { if (!inFlight) busy = false; }
     }
-    function grant(source, entry, resume = false) {
+    function grant(source, entry, resume = false, resetVideoLines = false) {
         let documentIds;
         if (coursePage() && P) {
             if (parentReadingFiles) return;
@@ -1259,7 +1275,7 @@
             resume ||= !entry.running; entry.running = true;
         }
         post(source, entry.kind === 'video' ? 'grant-video' : entry.kind === 'document' ? 'grant-document' : 'grant', { target: entry.nonce, task: courseTask(), resume,
-            rate: getPlaybackRate(), muted: getMuted(), mediaId: entry.mediaId, documentIds });
+            rate: getPlaybackRate(), muted: getMuted(), mediaId: entry.mediaId, documentIds, resetVideoLines });
     }
     async function tickRemoteVideo() {
         if (quietNow()) { remoteVideo?.pause(); return; }
@@ -1282,6 +1298,7 @@
             return;
         }
         if (renderedInPage === false) return;
+        if (await recoverVideoLine(video, remoteVideoTask)) return;
         if (!video.paused || remotePlayBusy || Date.now() - remotePlayAt < 2000) return;
         if (remotePlayAttempts >= 10) { pause('视频未能自动播放，请先点播放器的播放按钮再开始自动。'); return; }
         remotePlayAt = Date.now(); remotePlayAttempts++; remotePlayBusy = true;
@@ -1295,7 +1312,7 @@
         finally { remotePlayBusy = false; }
     }
     async function start({ recovery = false } = {}) {
-        if (!recovery) { recoverySerial++; recovering = false; inFlight?.abort(); }
+        if (!recovery) { recoverySerial++; recovering = false; inFlight?.abort(); videoLines?.reset(); }
         if (isTop && coursePage()) sessionStorage.setItem(autoKey, '1');
         if (quietNow()) { suspendForQuiet(); resumeAfterQuiet = true; notify('已预约：夜间休息中，07:00 后自动开始（北京时间）'); return; }
         stopped = false; automatic = true; navigationRequested = false; documentReportedTask = ''; epoch++;
@@ -1320,7 +1337,7 @@
                     if (entry.kind === 'document') completedDocumentSenders.delete(entry.nonce);
                 }
                 if (entry.kind === 'video' ? canClaimVideo(source, entry) && !parentHasVideo() :
-                    canClaim(source, entry) && (entry.kind !== 'document' || !F.find(document).length)) grant(source, entry, true);
+                    canClaim(source, entry) && (entry.kind !== 'document' || !F.find(document).length)) grant(source, entry, true, !recovery);
             }
             for (const [source, entry] of quizFrames) if (entry.task === courseTask() && Date.now() - entry.at < 4000)
                 post(source, 'grant-video-quiz', { target: entry.nonce, task: courseTask(), resume: true });
@@ -1532,6 +1549,7 @@
             }
             if (data.type === 'grant-video') {
                 if (data.mediaId !== remoteMediaId) return;
+                if (data.resetVideoLines) videoLines?.reset();
                 remoteVideoTask = data.task; selectedPlaybackRate = remoteVideoRate = XxtCodexCore.normalizePlaybackRate(data.rate); parentManaged = true;
                 if (typeof data.muted === 'boolean') selectedMuted = data.muted;
                 if (data.resume) stopped = false;
@@ -1595,7 +1613,7 @@
             expectedCheckTask = ''; expectedVideoTask = courseTask(); frameClaimAt = 0;
             if (automatic && !stopped) notify('已切换到新视频，正在重新接管播放…');
         },
-        onVideoPlaying() { if (automatic && !stopped && !hasVideoQuiz() && expectedCheckTask !== courseTask()) notify('正在播放本节视频…'); },
+        onVideoPlaying() { if (automatic && !stopped && !hasVideoQuiz() && !videoLines?.active(window.app?._videoEl) && expectedCheckTask !== courseTask()) notify('正在播放本节视频…'); },
         enterCheckStep(status) {
             if (hasVideoQuiz()) return true;
             if (quietNow()) return true;

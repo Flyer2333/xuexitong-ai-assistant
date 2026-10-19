@@ -73,7 +73,7 @@
         }
         if (c.reasoning) {
             const profile = catalog.reasoningProfile(c), value = c.reasoning;
-            if (profile === 'thinking') body.thinking = { type: value };
+            if (profile === 'thinking' || profile === 'doubao' && ['enabled','disabled'].includes(value)) body.thinking = { type: value };
             else if (profile === 'qwen') body.enable_thinking = value === 'enabled';
             else if (profile === 'claude') body.output_config = { effort: value };
             else if (profile === 'gemini') body.generationConfig.thinkingConfig = { thinkingLevel: value };

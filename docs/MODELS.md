@@ -4,11 +4,9 @@
 
 本目录收录已核实、适合文本或图文问答的模型，不包含语音合成、图像生成、向量嵌入和专用工具模型，也不是每个账号的实时可用列表。模型权限、地域、套餐、预览版与下线时间仍以服务商控制台为准。切换选项不会联网或产生 API 费用；“测试 AI”和实际答题可能计费。
 
-1.0.13 再次读取现有 10 家服务商的 26 个目录/参数来源，并复核可读的上下架公告，未发现需要改变现有 58 个快捷 ID 的信息。智谱目录本轮恢复可读并跳转到 GLM-5.3-Flash/FlashX 官方页；DeepSeek 更新页也恢复可读。小米模型目录仍无正文，豆包目录、参数及更新公告仍无有效正文；这些部分保留此前核查结果，不声称本轮重新核实成功。OpenAI、Claude、Gemini 下线页及千问、硅基流动可读公告已重查；未调用付费 API 逐项验证。
+1.0.14 重新读取现有 10 家服务商的目录、推理参数及可读的上下架公告，并补读 Omni、火山发布公告和 Kimi 官方帮助页。当前共 **61 个快捷 ID**：新增百炼 `xiaomi/mimo-v2.6-pro-ultraspeed`，以及火山 `deepseek-v4-1-flash-260910`、`glm-5-3-flash-260828`。托管 ID 按各平台官方记录收录，不从原厂名称推导；是否可用仍需匹配地域、业务空间和账号权限。
 
-1.0.12 复查了全部 10 家服务商原有的 22 个目录/参数来源，并补读型号页及可读的上下架公告。目录新增三项千问 3.8 型号，共 58 个快捷 ID；它们是本次补齐的选项，并不表示模型都在本次发布当天上线。`qwen3.8-27b` 支持图片和思考开关；`qwen3.8-2.4t-a95b` 仅作文本输入、推理使用默认值；`qwen3.8-omni-flash` 支持 Chat Completions/Responses 的文本与图片理解，暂不推断额外推理参数。地域与权限仍需自行核对。
-
-1.0.12 核查时 DeepSeek 目录和请求参数恢复可读；智谱国内目录当时读取失败，GLM-5.3 国际官方说明可读；小米模型目录及 Token Plan 页面无有效正文，Chat API 可读；豆包目录、参数和更新公告无有效正文。不可读部分保留此前核查的型号，不宣称全部重新核实。其余可读目录及参数、OpenAI/Claude/Gemini 下线页、千问上下架页和硅基流动公告均已核对。未逐一调用付费 API 验证账号可用性。
+本次豆包深度思考和发布公告恢复可读，已补充 Seed 的强度选项；千问 Omni 的具体参数页已明确强度取值及映射。小米模型目录仍无正文，但 Chat API 型号枚举可读；豆包完整目录仍只有页面框架，DeepSeek 更新汇总读取失败，Kimi 强度页再次读取失败，后者改用官方帮助页交叉核对。不可读部分不声称全面复核；未逐一调用付费 API 验证。原有 58 个 ID 保留，模型和密钥不会因更新被覆盖。
 
 ## 各服务商目录与来源
 
@@ -19,10 +17,10 @@
 | Gemini | Gemini 4 Argon（推理暂用默认值）、当前 Flash 与 Flash-Lite、仍列出的 Pro/Flash 预览版和 2.5 系列；旧账号限制见官方说明 | [模型目录](https://ai.google.dev/gemini-api/docs/models)、[思考参数](https://ai.google.dev/gemini-api/docs/thinking) |
 | DeepSeek | `deepseek-flash`、`deepseek-v4-pro`；Flash 为当前官方调用别名 | [首次调用](https://api-docs.deepseek.com/zh-cn/)、[请求参数](https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/) |
 | 小米 MiMo | V2.6 Pro、Flash、Pro UltraSpeed；即将下线的 2.5 系列不作为快捷选项 | [模型目录](https://mimo.mi.com/docs/en-US/quick-start/model)、[Chat API](https://mimo.mi.com/docs/zh-CN/api/chat/openai-api) |
-| Kimi | K3、K2.6、K2.7 Code 及高速版；不再列出已下线的 K2.5/moonshot-v1 | [模型目录](https://platform.kimi.com/docs/models)、[思考模式](https://platform.kimi.com/docs/guide/use-thinking-models)、[K3 强度](https://platform.kimi.com/docs/guide/use-reasoning-effort) |
+| Kimi | K3、K2.6、K2.7 Code 及高速版；不再列出已下线的 K2.5/moonshot-v1 | [模型目录](https://platform.kimi.com/docs/models)、[思考模式](https://platform.kimi.com/docs/guide/use-thinking-models)、[K3 强度](https://platform.kimi.com/docs/guide/use-reasoning-effort)、[官方故障排查](https://www.kimi.com/help/kimi-api/api-troubleshooting) |
 | 智谱 GLM | `glm-5.3`、`glm-5.3-flash`、`glm-5.3-flashx`；Flash/FlashX 原生支持图片，参数与 5.3 一致，不能关闭思考，需匹配 API 权限 | [国内目录](https://docs.bigmodel.cn/cn/guide/models)、[GLM-5.3 官方说明](https://docs.z.ai/guides/llm/glm-5.3) |
-| 千问 / 百炼 | 已核实的 3.8/3.7/3.6/3.5 系列和 VL，新增 27B、2.4T-A95B、Omni Flash；托管第三方模型可手填 | [模型大全](https://help.aliyun.com/zh/model-studio/models)、[模型范围](https://help.aliyun.com/zh/model-studio/batch-inference)、[深度思考](https://help.aliyun.com/zh/model-studio/deep-thinking/)、[文本生成](https://help.aliyun.com/zh/model-studio/text-generation)、[上下架公告](https://help.aliyun.com/zh/model-studio/newly-released-models) |
-| 豆包 / 火山方舟 | 当前 Seed 2.1 Pro/Lite/Turbo、Evolving 和 2.0 Lite；专属 `ep-` 接入点使用手动填写 | [模型目录](https://docs.volcengine.com/docs/ark/model-list?lang=zh)、[深度思考](https://docs.volcengine.com/docs/ark/deep-thinking?lang=zh) |
+| 千问 / 百炼 | 已核实的 3.8/3.7/3.6/3.5 系列和 VL，新增 27B、2.4T-A95B、Omni Flash；托管第三方模型可手填 | [模型大全](https://help.aliyun.com/zh/model-studio/models)、[模型范围](https://help.aliyun.com/zh/model-studio/batch-inference)、[深度思考](https://help.aliyun.com/zh/model-studio/deep-thinking/)、[文本生成](https://help.aliyun.com/zh/model-studio/text-generation)、[上下架公告](https://help.aliyun.com/zh/model-studio/newly-released-models)、[Omni 参数](https://help.aliyun.com/zh/model-studio/qwen-omni) |
+| 豆包 / 火山方舟 | 当前 Seed 2.1 Pro/Lite/Turbo、Evolving、2.0 Lite 及已核实的托管 DeepSeek/GLM；专属 `ep-` 接入点使用手动填写 | [模型目录](https://docs.volcengine.com/docs/ark/model-list?lang=zh)、[深度思考](https://docs.volcengine.com/docs/ark/deep-thinking?lang=zh)、[模型发布](https://docs.volcengine.com/docs/ark/model-release-announcement?lang=zh) |
 | 硅基流动 | 已核实的 GLM、DeepSeek、Kimi、Qwen 托管 ID；保留组织前缀，不与原厂 ID 混用。国际与国内目录可能不同 | [调整公告](https://docs.siliconflow.cn/docs/release-notes/overview)、[GLM-5.3 部署说明](https://www.siliconflow.com/zh-tw/blog/glm-5.3-now-live-on-siliconflow) |
 
 下线与限制核对：[OpenAI](https://developers.openai.com/api/docs/deprecations)、[Claude](https://platform.claude.com/docs/en/about-claude/model-deprecations)、[Gemini](https://ai.google.dev/gemini-api/docs/deprecations)、[千问](https://help.aliyun.com/zh/model-studio/model-depreciation)。当前 Gemini 2.5 系列仅部分原有账号可用；不因出现在列表就保证新账号能调用。DeepSeek 的新版本继续使用 `deepseek-flash` 别名，不把显示名拼成另一个 ID。
@@ -47,8 +45,10 @@ GPT-6 Sol 与 Luna 可选 none；Astra 与 6.1 Sol 不能关闭推理。依据�
 | Kimi K2.7 Code | 服务商默认值 | 始终思考，不发送关闭参数 |
 | 智谱 GLM-5.3 / Flash / FlashX | low / high / max | `reasoning_effort`，不能关闭思考 |
 | 当前目录的千问混合思考模型（不含 Omni） | 开启 / 关闭思考 | 顶层 `enable_thinking` 布尔值 |
-| 千问 3.8 2.4T-A95B / Omni Flash | 服务商默认值 | 2.4T 不能关闭思考；Omni 暂不发送额外推理参数 |
-| 当前目录的豆包模型 | 开启 / 关闭思考 | `thinking.type`；不套用另一套 Managed Agents API 的强度枚举 |
+| 千问 3.8 2.4T-A95B / 百炼托管 MiMo | 服务商默认值 | 2.4T 不能关闭思考；托管 MiMo 暂不猜测额外参数 |
+| 千问 3.8 Omni Flash | none / minimal / low / medium / high / xhigh / max | Chat 顶层 `reasoning_effort`；minimal 映射 low，high/max 映射 xhigh，none 关闭思考 |
+| 当前目录的豆包 Seed | 开启 / 关闭，或 none / minimal / low / medium / high / xhigh / max | 开关发送 `thinking.type`，强度发送 Chat 顶层 `reasoning_effort`，不同时发送；none/minimal 关闭，xhigh/max 映射 high |
+| 火山托管 DeepSeek Flash / GLM Flash | 前者 none / low / high / max；后者 low / high / max | 平台实际 `reasoning_effort`；GLM 的低档不代表关闭思考 |
 | 硅基流动 GLM-5.3 | low / high / max | 平台部署支持的 `reasoning_effort` |
 | 其他未核实模型、不同协议组合 | 服务商默认值 | 不猜测兼容参数 |
 | 自定义 Chat / Responses | 通用强度选项 | 由使用者确认网关支持范围 |

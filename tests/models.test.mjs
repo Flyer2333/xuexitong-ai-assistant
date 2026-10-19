@@ -49,3 +49,18 @@ test('legacy unsupported effort resets while model and credential are retained',
     globalThis.GM_getValue=()=>config('kimi','kimi-k2.6','xhigh'); const c=A.load();
     assert.equal(c.model,'kimi-k2.6'); assert.equal(c.key,'fixture-key'); assert.equal(c.reasoning,'');
 });
+
+
+test('verified Doubao and Omni effort fields, aliases and hosted model boundaries',()=>{
+    const seed='doubao-seed-2-1-pro-260915';
+    for(const value of ['none','minimal','low','medium','high','xhigh','max']){
+        const b=build('doubao',seed,value);assert.equal(b.reasoning_effort,value);assert(!b.thinking);
+        const o=build('qwen','qwen3.8-omni-flash',value);assert.equal(o.reasoning_effort,value);assert(!o.enable_thinking);assert(!o.thinking_budget);
+    }
+    assert.deepEqual(build('doubao',seed,'disabled').thinking,{type:'disabled'});
+    assert.equal(build('doubao','deepseek-v4-1-flash-260910','max').reasoning_effort,'max');
+    assert.throws(()=>build('doubao','glm-5-3-flash-260828','none'),/不支持/);
+    assert.equal(build('doubao','glm-5-3-flash-260828','low').reasoning_effort,'low');
+    assert(C.model('qwen','xiaomi/mimo-v2.6-pro-ultraspeed').vision);
+    assert.throws(()=>build('qwen','xiaomi/mimo-v2.6-pro-ultraspeed','enabled'),/不支持/);
+});

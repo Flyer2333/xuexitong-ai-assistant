@@ -56,5 +56,14 @@
         try { index = Number(new URL(doc.querySelector('#iframe')?.getAttribute('src'), doc.baseURI).searchParams.get('num')) || 0; } catch {}
         return { items: list.map((element, i) => ({ element, id: element.getAttribute('cardid') || String(i), index: i, label: element.title || D.text(element) })), index };
     }
-    globalThis.XxtPageTasks = { scan, complete, steps };
+    function replayControl(video) {
+        if (!video?.isConnected || !video.ended) return null;
+        const root = video.closest('.video-js') || video.parentElement;
+        if (root?.querySelectorAll('video').length !== 1) return null;
+        // The live control is a button, not the big central play overlay.
+        return [...(root?.querySelectorAll('button.vjs-play-control.vjs-ended') || [])].find(button =>
+            D.visible(button) && !button.disabled && button.getAttribute('aria-disabled') !== 'true' &&
+            (button.title === '重播' || D.text(button).trim() === '重播')) || null;
+    }
+    globalThis.XxtPageTasks = { scan, complete, steps, replayControl };
 })();

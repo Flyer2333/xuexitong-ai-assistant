@@ -55,7 +55,7 @@ async function scenario({ cross = false, mode = 'stale', ignored = 0 } = {}) {
             window.__accepted++; window.__record('accepted');
             window.__record('selected', [...document.querySelectorAll('.tkRadio input')].flatMap((x, i) => x.checked ? [String.fromCharCode(65 + i)] : []));
             document.getElementById('videoquiz-submit').style.display = 'none'; document.getElementById('videoquiz-submitting').style.display = 'inline';
-            setTimeout(window.__success, mode === 'restart-pending' ? 1200 : 200);
+            if (mode !== 'background') setTimeout(window.__success, mode === 'restart-pending' ? 1200 : 200);
         };
         document.getElementById('videoquiz-continue').onclick = () => { window.__record('continued'); document.querySelector('[data-popup]').remove(); };
         if (mode === 'wrong') {
@@ -74,6 +74,22 @@ async function scenario({ cross = false, mode = 'stale', ignored = 0 } = {}) {
         await reader.evaluate(() => { window.__offset += 21000; });
         await page.waitForFunction(() => /页面响应超时/.test(document.querySelector('[data-xxt-codex-panel] pre')?.textContent || ''));
         assert.equal(seen.model, 0); assert.equal(seen.clicks, 0);
+    } else if (mode === 'background') {
+        await reader.waitForFunction(() => window.__accepted === 1);
+        for (const f of cross ? [page.mainFrame(), reader] : [reader]) await f.evaluate(() => {
+            Object.defineProperty(document, 'hidden', {configurable:true, value:true});
+            document.dispatchEvent(new Event('visibilitychange')); window.__offset += 90000;
+        });
+        await page.waitForTimeout(1400);
+        assert.equal(seen.clicks, 1); assert.equal(seen.continued, 0);
+        assert(!/超时|未收到判题反馈/.test(await page.locator('[data-xxt-codex-panel] pre').textContent()));
+        await reader.evaluate(() => window.__success());
+        for (const f of cross ? [page.mainFrame(), reader] : [reader]) await f.evaluate(() => {
+            Object.defineProperty(document, 'hidden', {configurable:true, value:false});
+            document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new Event('focus'));
+        });
+        await reader.waitForFunction(() => !document.querySelector('[data-popup]'));
+        assert.equal(seen.clicks, 1); assert.equal(seen.accepted, 1); assert.equal(seen.continued, 1); assert.equal(seen.model, 1);
     } else if (mode === 'pending') {
         await page.waitForTimeout(2700);
         assert.equal(seen.clicks, 0, 'A visible judging indicator cannot be recovered by sending another submit.');
@@ -105,12 +121,14 @@ async function scenario({ cross = false, mode = 'stale', ignored = 0 } = {}) {
     observations.push({ mode, cross, ignored, legacy, ...seen }); await page.close();
 }
 try {
-    if (legacy) await scenario();
+    if (process.argv.includes('--background-only')) {await scenario({mode:'background'});await scenario({mode:'background',cross:true});}
+    else if (legacy) await scenario();
     else {
         await scenario(); await scenario({ cross: true }); await scenario({ mode: 'history' });
         await scenario({ mode: 'wrong' }); await scenario({ mode: 'correct' }); await scenario({ mode: 'pending', cross: true });
         await scenario({ mode: 'active', ignored: 1 }); await scenario({ mode: 'stopped', ignored: 1 });
         await scenario({ mode: 'unresponsive', ignored: 999 }); await scenario({ mode: 'restart-pending', cross: true });
+        await scenario({mode:'background'});await scenario({mode:'background',cross:true});
     }
     await writeFile(`${temp}/${legacy ? 'legacy-' : ''}observations.json`, JSON.stringify(observations, null, 2));
     console.log(`${observations.length} ${legacy ? 'stale submitted timeout reproduced' : 'submission recovery cases passed'}; synthetic DOM fixture, synthetic state/feedback/model.`);

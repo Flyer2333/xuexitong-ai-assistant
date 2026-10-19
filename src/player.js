@@ -144,6 +144,7 @@
                 }, this.configs.videoCheckInterval);
             },
             _tryResumePlayback(reason) {
+                if (!this.configs.autoplay || globalThis.XxtCodexControl?.shouldHold?.()) return;
                 if (globalThis.XxtCodexControl?.hasVideoQuiz?.()) return;
                 if (globalThis.XxtCodexControl?.isQuietHours?.()) return;
                 const now = Date.now();
@@ -153,11 +154,12 @@
                 this._guardLastResumeTs = now;
 
                 const video = this._getVideoEl();
-                if (!video || !this._isPlaying) return;
+                if (!video || !this._isPlaying || !this._isLiveVideo(video) || video.ended) return;
                 if (globalThis.XxtCodexControl?.getMuted) video.muted = globalThis.XxtCodexControl.getMuted();
 
                 console.log(`%c触发视频保活恢复(${reason})`, "color:#607D8B");
                 video.play().catch((e) => {
+                    if (!this._isPlaying || !this._isLiveVideo(video) || video.ended || globalThis.XxtCodexControl?.shouldHold?.()) return;
                     console.warn("直接恢复播放失败，尝试静音恢复:", e);
                     if (globalThis.XxtCodexControl?.getMuted?.() === false) { globalThis.XxtCodexControl.audioBlocked(); return; }
                     video.muted = true;
@@ -589,6 +591,12 @@
             },
             _handleVideoPause(e) {
                 console.log(`%c============视频暂停=============`, "color:#FF9800");
+                if (this._pauseResumeTimer) clearTimeout(this._pauseResumeTimer);
+                const video = e.target;
+                this._pauseResumeTimer = setTimeout(() => {
+                    this._pauseResumeTimer = null;
+                    if (this._videoEl === video && video.paused && !video.ended) this._tryResumePlayback('pause-event');
+                }, 250);
             },
             _bindPageGuards() {
                 const preventPause = (e) => {
@@ -602,6 +610,7 @@
                 document.addEventListener('mouseout', preventPause);
                 window.addEventListener('mouseout', preventPause);
                 window.addEventListener('blur', resumePlaybackNow);
+                window.addEventListener('focus', resumePlaybackNow);
                 document.addEventListener('visibilitychange', resumePlaybackNow);
             },
             destroy() {
@@ -610,6 +619,7 @@
                 this._detachVideoEvents();
                 if (this._delayedNextUnitTimer) clearTimeout(this._delayedNextUnitTimer);
                 if (this._reenterTimer) clearTimeout(this._reenterTimer);
+                if (this._pauseResumeTimer) clearTimeout(this._pauseResumeTimer);
                 if (this._courseFrameLoadHandler) document.removeEventListener('load', this._courseFrameLoadHandler, true);
                 $(document).off('.xuexitongPlayerV3');
                 if (this._pageGuards) {
@@ -619,6 +629,7 @@
                     document.removeEventListener('mouseout', preventPause);
                     window.removeEventListener('mouseout', preventPause);
                     window.removeEventListener('blur', resumePlaybackNow);
+                    window.removeEventListener('focus', resumePlaybackNow);
                     document.removeEventListener('visibilitychange', resumePlaybackNow);
                     this._pageGuards = null;
                 }

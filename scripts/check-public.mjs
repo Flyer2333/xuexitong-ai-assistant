@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import {themeAssetCode} from './theme-assets.mjs';
 const root=resolve(import.meta.dirname,'..');
 function walk(dir){return readdirSync(dir).flatMap(name=>{if(['.git','node_modules','artifacts','local'].includes(name))return [];const path=resolve(dir,name);return statSync(path).isDirectory()?walk(path):[path];});}
-const paths=walk(root);
+// These local working notes are excluded by package.mjs and the upload whitelist.
+const paths=walk(root).filter(path=>!['TASK_PROGRESS.md','AGENTS.md'].includes(relative(root,path)));
 for(const path of paths){
  const name=relative(root,path).replaceAll('\\','/');
  if(/bridge-token|\.log$|本机\.user\.js|hongya|虹芽|job-/.test(name))throw Error(`Private artifact path: ${name}`);

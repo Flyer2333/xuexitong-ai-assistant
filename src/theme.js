@@ -62,6 +62,8 @@
 [data-xxt-codex-panel] .xxt-feedback details[open] summary:before{content:'▾'}
 [data-xxt-codex-panel] .xxt-feedback-copy{margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--tint)}
 [data-xxt-codex-panel] .xxt-feedback-copy>div+div{margin-top:6px}
+[data-xxt-codex-panel] [data-skipped-log] ul{padding-left:18px;margin:8px 0;overflow-wrap:anywhere}
+[data-xxt-codex-panel] [data-skipped-log] li+li{margin-top:6px}
 [data-xxt-codex-panel] [hidden]{display:none!important}
 `;
     function aiSettings(onChange) {
@@ -137,7 +139,7 @@
         clear.onclick = () => { onChange(); GM_setValue('xxt-ai-config',{ ...A.load(),key:'' }); populate(); message.textContent = '已清除当前密钥。'; };
         controls.append(save,clear); form.append(note,controls,message); section.append(heading,form); populate(); return section;
     }
-    function decorate(panel, { title, actions, output, details, onQuietChange, playbackRate, onRateChange, onAiChange, muted, onMutedChange }) {
+    function decorate(panel, { title, actions, output, details, runLog, onQuietChange, playbackRate, onRateChange, onAiChange, muted, onMutedChange }) {
         const style = document.createElement('style'); style.textContent = css; document.head.append(style);
         panel.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:2147483647;width:min(360px,calc(100vw - 36px));text-align:left';
         const make = (tag,cls) => { const el = document.createElement(tag); el.className = cls; return el; };
@@ -189,7 +191,7 @@
         const authorNote = document.createElement('div'); authorNote.textContent = '脚本根据作者自己的实际使用需求编写，并持续完善。遇到暂不支持的场景，或有希望增加的功能，欢迎及时反馈；作者会第一时间跟进，评估后补充相应设置和功能。';
         feedbackCopy.append(authorNote,feedbackNote,privacyNote); feedbackDetails.append(feedbackSummary,feedbackCopy);
         feedback.append(feedbackLinks,feedbackDetails);
-        actions.className = 'xxt-actions'; body.append(actions,status,output,foregroundNote,aiSettings(onAiChange),settings,details,XxtUpdates.create(),feedback); header.append(name,fold); shell.append(header,picker,body); panel.replaceChildren(shell,mascot);
+        actions.className = 'xxt-actions'; body.append(actions,status,output,foregroundNote,aiSettings(onAiChange),settings,details,...(runLog ? [runLog] : []),XxtUpdates.create(),feedback); header.append(name,fold); shell.append(header,picker,body); panel.replaceChildren(shell,mascot);
         applySkin(GM_getValue('xxt-ui-skin','default'));
         let drag;
         header.onpointerdown = event => { if (event.button !== 0 || event.target.closest('button')) return; const r = panel.getBoundingClientRect(); drag = {x:event.clientX-r.left,y:event.clientY-r.top}; header.setPointerCapture(event.pointerId); event.preventDefault(); };

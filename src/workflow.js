@@ -26,6 +26,14 @@
     let pageReviewNeeded = false, pageSignature = '', pageChangedAt = 0, pageBlockedAt = 0;
     let pageVideo = null, pagePlaying = false, stepTransition = null, currentCard = '', stepDone = new Set();
     const startedVideos = new WeakSet();
+    const recoveryAttempts = new Set();
+    const skippedChapters = new Set();
+    const skippedAssets = new Set();
+    const skippedMarkers = new Set();
+    let recoverySerial = 0, recovering = false;
+    const videoSettlements = new Map();
+    const remoteSettlementRequests = new Set();
+    let remoteSettlementMedia = '';
     let parentReadingFiles = false;
     const topicDone = new WeakSet();
     let quietPaused = false, resumeAfterQuiet = false, unknownSince = 0, unknownTask = '';
@@ -35,6 +43,22 @@
     let selectedMuted = GM_getValue('xxt-video-muted', true) !== false;
     const getMuted = () => selectedMuted;
     let videoFinishProbe = null;
+    // Count observable foreground time for UI response failures only. Reading timers,
+    // API timeouts, frame ownership and quiet hours retain their own real clocks.
+    const hiddenPeriods = [];
+    let hiddenAt = document.hidden ? Date.now() : null, foregroundAt = 0;
+    function uiTimedOut(since, timeout) {
+        if (document.hidden || hiddenAt !== null || Date.now() - foregroundAt < 3000) return false;
+        const now = Date.now();
+        const hidden = hiddenPeriods.reduce((sum, [start, end]) => sum + Math.max(0, Math.min(now, end) - Math.max(since, start)), 0);
+        return now - since - hidden > timeout;
+    }
+    function recheckForeground() {
+        const now = Date.now();
+        if (document.hidden) { if (hiddenAt === null) hiddenAt = now; return; }
+        if (hiddenAt !== null) { hiddenPeriods.push([hiddenAt, now]); hiddenAt = null; foregroundAt = now; }
+        if (!unloaded) void tick().catch(error => pause(error.message));
+    }
     let remoteVideoTask = '', remoteVideoRate = selectedPlaybackRate, remoteVideo = null, remoteVideoEnded = false, remotePlayBusy = false, remotePlayAttempts = 0, remotePlayAt = 0;
     let remoteMediaId = '', remoteMediaIdentity = '';
     let renderedInPage = null;
@@ -79,6 +103,13 @@
         messageValue = value;
         if (panel) panel.querySelector('pre').textContent = value;
         if (themeStatus) { const sleep = /夜间休息|已预约/.test(value); themeStatus.textContent = sleep ? '夜间休息 · 北京时间' : '学习流程 · 多模型接入'; panel.dataset.sleeping = String(sleep); }
+        const log = panel?.querySelector('[data-skipped-log]');
+        if (log) {
+            const entries = GM_getValue(`xxt-skipped:${autoKey}`, []) || [];
+            log.querySelector('summary').textContent = `跳过记录 · ${entries.length} 项待复核`;
+            const list = log.querySelector('ul'); list.replaceChildren();
+            for (const entry of entries.slice(-20)) { const item = document.createElement('li'); item.textContent = `${entry.chapter}：${entry.reason}`; list.append(item); }
+        }
         if (coordinator && !coursePage()) post(coordinator, 'status', { task, value });
     }
     function save() { if (task) GM_setValue(`xxt-check:${task}`, record); }
@@ -87,7 +118,8 @@
         topicOwner?.cancel(); topicOwner = null; topicReportedTask = '';
         pageReviewNeeded = false; pageSignature = ''; pageChangedAt = Date.now(); pageBlockedAt = 0;
         stepTransition = null; currentCard = ''; stepDone = new Set(); pageVideo = null;
-        completedFileAssets.clear();
+        completedFileAssets.clear(); skippedAssets.clear(); skippedMarkers.clear();
+        videoSettlements.clear();
         if (coursePage() && task) {
             for (const [source, entry] of quizFrames) {
                 retiredQuizForms.add(`${entry.nonce}/${entry.signature}`);
@@ -123,15 +155,74 @@
         if (!coursePage() && panel) panel.hidden = true;
         return true;
     }
-    function pause(reason) {
+    function pause(reason, allowRecovery = true) {
+        const recover = allowRecovery && coursePage() && automatic && !stopped && !recovering && !unloaded;
+        const recoveryReason = String(reason).replace(/[，,]?已暂停.*$/, '').replace(/[，,]?已停止[。.]?$/, '');
         if (quietPaused && quietNow()) { notify('夜间休息中（23:00—07:00，北京时间）'); return; }
         if (isTop && coursePage()) sessionStorage.removeItem(autoKey);
         closeDocument(); topicOwner?.cancel(); topicOwner = null;
         cancelConfirmation(); pendingConfirmations.clear();
         automatic = false; stopped = true; epoch++; inFlight?.abort();
-        record.paused = true; save(); notify(reason);
+        record.paused = true; save(); notify(recover ? `${recoveryReason}，准备自动恢复…` : reason);
         if (coursePage()) { stopPlayer(); for (const [source, entry] of controlledFrames()) post(source, 'stop', { target: entry.nonce }); }
         if (!isTop && !coursePage()) report('pause', { reason, task });
+        if (recover) void recoverAutomatic(recoveryReason);
+    }
+    function rememberSkipped(reason) {
+        skippedChapters.add(courseTask());
+        const chapter = D.text(document.querySelector('#coursetree .posCatalog_active .posCatalog_name')) || '当前章节';
+        const key = `xxt-skipped:${autoKey}`;
+        const list = GM_getValue(key, []) || [];
+        list.push({ chapter, reason: String(reason).slice(0, 300), at: Date.now() });
+        GM_setValue(key, list.slice(-100));
+        notify(`已记录待复核：${chapter}，${reason}。继续处理其余内容…`);
+    }
+    async function recoverAutomatic(reason) {
+        const serial = ++recoverySerial, context = courseTask();
+        const valid = () => serial === recoverySerial && context === courseTask() && !quietNow() && !unloaded;
+        recovering = true;
+        try {
+            // Let the failed solver unwind before issuing the one bounded probe.
+            await D.delay(200);
+            if (!valid()) return;
+            if (!recoveryAttempts.has(context)) {
+                recoveryAttempts.add(context);
+                notify(`遇到问题：${reason}。自动测试 AI 并重新开始一次…`);
+                try { await request('/health'); }
+                catch (error) { if (!valid()) return; notify(`AI 测试未通过：${error.message}。记录本项后继续其余任务…`); }
+                if (!valid()) return;
+                pageBlockedAt = 0; unknownSince = 0; unknownTask = ''; videoFinishProbe = null;
+                // Give the same ended media another wait, without clicking replay twice.
+                for (const state of videoSettlements.values()) state.since = Date.now();
+                recovering = false;
+                await start({ recovery: true });
+                return;
+            }
+            automatic = true; stopped = false;
+            beforeClick();
+            rememberSkipped(reason);
+            const view = pageInventory();
+            const video = view?.videos.find(asset => !skippedAssets.has(asset.id) &&
+                (!videoDone(asset) || (asset.container && !P.complete(asset.container) && videoSettlements.has(asset.id))));
+            const file = view?.documents.find(asset => !fileDone(asset));
+            const marker = view?.markers.find(item => !item.done && !skippedMarkers.has(item.element) && item.kind !== 'check');
+            const question = view?.questions.find(asset => !questionDone(asset));
+            const asset = video || file || (!marker && question);
+            if (asset) {
+                skippedAssets.add(asset.id);
+                let container = asset.container || asset.entry?.element.closest('.ans-attach-ct');
+                try { container ||= asset.root?.frameElement?.closest('.ans-attach-ct'); } catch {}
+                if (container) skippedMarkers.add(container);
+                if (asset.video) asset.video.pause();
+            } else if (marker) skippedMarkers.add(marker.element);
+            pageBlockedAt = 0; unknownSince = 0; unknownTask = ''; videoFinishProbe = null;
+            completedTasks.delete(context);
+            recovering = false;
+            if (asset || marker) { await start({ recovery: true }); return; }
+            await advanceCourse('当前内容重试后仍无法处理，已跳过并记录待复核', true);
+        } catch (error) {
+            if (valid()) pause(`无法继续导航：${error.message}，请手动进入下一节`, false);
+        } finally { if (serial === recoverySerial) recovering = false; }
     }
     function pageInventory() {
         const view = P?.scan(pageWindow);
@@ -164,9 +255,13 @@
         return false;
     }
     function videoDone(asset) {
+        if (skippedAssets.has(asset.id)) return true;
         try { if (Q.find(asset.win.document)) return false; } catch {}
         if (quizFrames.has(asset.win)) return false;
         const video = asset.video;
+        const settlement = videoSettlements.get(asset.id);
+        if (settlement?.settled && settlement.container === asset.container && settlement.video === video &&
+            settlement.identity === (video ? video.currentSrc || video.src || '' : '') && P.complete(asset.container)) return true;
         if (!video) {
             const worker = [...frames].find(([source, entry]) => entry.kind === 'video' && covers(asset, source, 'video'))?.[1];
             if (worker?.running && !worker.ended && !completedMedia.has(`${worker.nonce}/${worker.mediaId}`)) return false;
@@ -177,14 +272,14 @@
             return video.ended;
         return video?.ended || P.complete(asset.container) || sourceFinished(asset, 'video');
     }
-    function fileDone(asset) { return (GM_getValue(`xxt-documents:${task}`, []) || []).includes(asset.entry?.id) ||
+    function fileDone(asset) { return skippedAssets.has(asset.id) || (GM_getValue(`xxt-documents:${task}`, []) || []).includes(asset.entry?.id) ||
         completedFileAssets.has(asset.id) || (!asset.entry && sourceFinished(asset, 'document')); }
-    function questionDone(asset) { return sourceFinished(asset, 'check') || (asset.win === pageWindow && record.phase === 'done'); }
+    function questionDone(asset) { return skippedAssets.has(asset.id) || sourceFinished(asset, 'check') || (asset.win === pageWindow && record.phase === 'done'); }
     function pendingKnowledge(view = pageInventory()) {
         if (!view) return false;
         return view.loading.length || view.videos.some(asset => !videoDone(asset)) || view.documents.some(asset => !fileDone(asset)) ||
             (R?.find(pageWindow) || []).some(entry => !topicDone.has(entry.element)) ||
-            view.markers.some(marker => marker.kind !== 'check' && !marker.done);
+            view.markers.some(marker => marker.kind !== 'check' && !marker.done && !skippedMarkers.has(marker.element));
     }
     function videoCandidate() {
         if (!coursePage() || !P || stepTransition) return null;
@@ -193,7 +288,7 @@
     function blockPage(reason) {
         pageReviewNeeded = true; pageBlockedAt ||= Date.now();
         notify(reason);
-        if (Date.now() - pageBlockedAt > 20000) throw new Error(`${reason}，已暂停，保留当前章节`);
+        if (uiTimedOut(pageBlockedAt, 20000)) throw new Error(`${reason}，已暂停，保留当前章节`);
         return true;
     }
     function resetCard(id) {
@@ -205,6 +300,8 @@
             record = {}; save();
         }
         currentCard = id; expectedCheckTask = ''; expectedVideoTask = ''; expectedDocumentTask = '';
+        videoSettlements.clear();
+        skippedAssets.clear(); skippedMarkers.clear();
         completedFileAssets.clear();
         documentReportedTask = ''; topicReportedTask = ''; navigationRequested = false; videoFinishProbe = null;
         pageReviewNeeded = false; pageSignature = ''; pageChangedAt = Date.now(); pageBlockedAt = 0; pageVideo = null;
@@ -236,9 +333,62 @@
         next.element.click(); notify(`当前页任务已完成，进入本章步骤：${next.label}`);
         return true;
     }
+    function settleEndedVideos(view) {
+        for (const asset of view.videos) {
+            if (skippedAssets.has(asset.id)) continue;
+            // Never borrow a sibling's task icon, nor infer completion from the clock text.
+            if (!asset.container || !view.markers.some(marker => marker.element === asset.container && marker.kind === 'video')) continue;
+            const agent = [...frames].find(([source, entry]) => entry.kind === 'video' && covers(asset, source, 'video'));
+            let state = videoSettlements.get(asset.id);
+            if (state && (state.container !== asset.container || state.video !== asset.video || state.task !== task ||
+                state.identity !== (asset.video ? asset.video.currentSrc || asset.video.src || '' : '') ||
+                (!asset.video && (!agent || state.nonce !== agent[1].nonce || state.mediaId !== agent[1].mediaId)))) {
+                videoSettlements.delete(asset.id); state = null;
+            }
+            if (P.complete(asset.container)) {
+                if (state && !state.settled) {
+                    state.settled = true;
+                    if (state.clicked) {
+                        asset.video?.pause();
+                        if (state.source) post(state.source, 'stop', { target: state.nonce });
+                    }
+                    pageBlockedAt = 0;
+                }
+                continue;
+            }
+            const actuallyEnded = asset.video ? asset.video.ended : agent &&
+                (agent[1].ended || completedMedia.has(`${agent[1].nonce}/${agent[1].mediaId}`));
+            if (!state && !actuallyEnded) continue;
+            if (!state) {
+                state = { task, container: asset.container, video: asset.video, identity: asset.video ? asset.video.currentSrc || asset.video.src || '' : '', since: Date.now(), clicked: false,
+                    source: agent?.[0], nonce: agent?.[1].nonce, mediaId: agent?.[1].mediaId };
+                videoSettlements.set(asset.id, state);
+            }
+            if (state.settled) return blockPage('视频任务点重新变为未完成，请核对平台状态');
+            pageReviewNeeded = true;
+            if (uiTimedOut(state.since, 23000)) throw new Error('视频已播完，重播恢复后任务点仍未结算或按钮不可用，已暂停，请手动核对');
+            if (!state.clicked && Date.now() - state.since >= 3000) {
+                if (asset.video) {
+                    const replay = P.replayControl(asset.video);
+                    if (replay) { beforeClick(); state.clicked = true; replay.click(); }
+                } else if (agent && state.source) {
+                    beforeClick(); state.clicked = true;
+                    // Loading the real media source can rotate its ID after the
+                    // original play grant. Authorize this exact ended media first.
+                    post(state.source, 'grant-video', { target: state.nonce, task, mediaId: state.mediaId,
+                        resume: true, rate: getPlaybackRate(), muted: getMuted() });
+                    post(state.source, 'settle-video', { target: state.nonce, task, mediaId: state.mediaId });
+                }
+            }
+            notify(state.clicked ? '视频已播完，已尝试一次重播恢复，等待对应任务点变绿后继续…' : '视频已播完，等待对应任务点结算；仍未完成时尝试一次重播恢复…');
+            return true;
+        }
+        return false;
+    }
     async function coordinatePage() {
         const view = pageInventory();
         if (!view) return false;
+        if (settleEndedVideos(view)) return true;
         const pending = view.videos.find(asset => !videoDone(asset));
         if (pending) {
             pageReviewNeeded = true;
@@ -290,7 +440,7 @@
         if (view.documents.length) pageReviewNeeded = true;
         if (view.loading.length) return blockPage('正在等待页面所有任务加载');
         if ((R?.find(pageWindow) || []).some(entry => !topicDone.has(entry.element))) { await readTopics(); return true; }
-        const pendingMarker = view.markers.find(marker => marker.kind !== 'check' && !marker.done);
+        const pendingMarker = view.markers.find(marker => marker.kind !== 'check' && !marker.done && !skippedMarkers.has(marker.element));
         if (pendingMarker) return blockPage(pendingMarker.kind === 'unknown' ? '存在无法识别且尚未完成的任务点' : '正在等待平台确认本页知识任务点完成');
         pageBlockedAt = 0;
         const question = view.questions.find(asset => !questionDone(asset));
@@ -301,6 +451,9 @@
             else notify('等待本页检测组件接入…');
             return true;
         }
+        if ((skippedAssets.size || skippedMarkers.size) && !pendingKnowledge(view) && view.questions.every(questionDone)) {
+            await advanceCourse('已处理可识别任务，其余已记录待复核'); return true;
+        }
         return false;
     }
     function transitionBlocked(includeChecks = false) {
@@ -308,7 +461,7 @@
         if (!view) return false;
         pageReviewNeeded = true;
         if (pendingKnowledge(view) || (includeChecks && view.questions.some(asset => !questionDone(asset)))) return true;
-        if (includeChecks && view.markers.some(marker => !marker.done)) return blockPage('平台仍有任务点未完成');
+        if (includeChecks && view.markers.some(marker => !marker.done && !skippedMarkers.has(marker.element))) return blockPage('平台仍有任务点未完成');
         if (Date.now() - pageChangedAt < 2000) { notify('正在复核本页任务清单，等待内容稳定…'); return true; }
         return false;
     }
@@ -364,9 +517,15 @@
         I.dismiss(pageWindow);
     }
     async function waitFor(test, timeout = 12000) {
-        const end = Date.now() + timeout;
-        while (Date.now() < end) { beforeClick(); const value = test(); if (value) return value; await D.delay(200); }
-        throw new Error('页面响应超时，已停止，避免重复操作');
+        const since = Date.now(), currentEpoch = epoch;
+        while (true) {
+            beforeClick();
+            if (currentEpoch !== epoch || unloaded) throw new Error('页面上下文已变化，取消旧等待');
+            const value = test();
+            if (value) return value;
+            if (uiTimedOut(since, timeout)) throw new Error('页面响应超时，已停止，避免重复操作');
+            await D.delay(200);
+        }
     }
     function cancelConfirmation() {
         if (submitRequest && coordinator) post(coordinator, 'confirm-cancel', { task: submitRequest.task, requestId: submitRequest.id });
@@ -511,10 +670,11 @@
         } catch (error) { if (!unloaded) pause(error.message); }
         finally { busy = false; inFlight = null; }
     }
-    async function advanceCourse(reason) {
-        if (hasVideoQuiz()) { notify('视频弹题尚未结束，等待作答后再切节。'); return; }
+    async function advanceCourse(reason, forceSkip = false) {
+        const skipping = forceSkip || skippedChapters.has(courseTask()) || skippedAssets.size > 0 || skippedMarkers.size > 0;
+        if (!forceSkip && hasVideoQuiz()) { notify('视频弹题尚未结束，等待作答后再切节。'); return; }
         if (completedTasks.has(courseTask())) return;
-        if (transitionBlocked(true)) return;
+        if (!forceSkip && transitionBlocked(true)) return;
         if (nextStudyStep()) return;
         pageReviewNeeded = false;
         const oldTask = courseTask();
@@ -527,27 +687,30 @@
             await waitFor(() => D.findNext(document) || window.app?.nextUnit, 5000);
             next = D.findNext(document);
         }
-        if (next && !D.enabled(next)) { pause('平台下一节按钮不可用，已停止'); return; }
+        if (next && !D.enabled(next)) { pause('平台下一节按钮不可用，需手动导航', false); return; }
         notify(`${reason}，正在进入下一节…`);
         beforeClick();
         if (P || D.readResult(document) || D.extract(document).length || F.find(document).length) navigationContent = { task: oldTask, signature: checkContent(), at: Date.now() };
         let confirmed = false;
-        if (pendingPrompt) { completedTasks.delete(oldTask); pause('平台仍提示当前章节有未完成任务，已保留本节，请核对任务点'); return; }
+        if (pendingPrompt && skipping) { pendingPrompt.next.click(); confirmed = true; }
+        else if (pendingPrompt) { completedTasks.delete(oldTask); pause('平台仍提示当前章节有未完成任务，正在尝试恢复'); return; }
         else if (next) next.click();
         else if (window.app?.nextUnit) window.app.nextUnit();
-        else { pause('未找到课程导航，请手动进入下一节'); return; }
-        const deadline = Date.now() + 12000;
-        while (Date.now() < deadline) {
+        else { pause('未找到课程导航，请手动进入下一节', false); return; }
+        const navigationAt = Date.now();
+        while (true) {
             if (courseTask() !== oldTask) { frameClaimAt = 0; frameClaimTask = ''; notify('已进入下一节，继续学习。'); return; }
             beforeClick();
             if (currentEpoch !== epoch) throw new Error('切换上下文已变化，取消旧导航确认');
             const prompt = !confirmed && D.ancestorNavigationPrompt(pageWindow);
             if (prompt) {
-                completedTasks.delete(oldTask); pause('平台仍提示有未完成任务，已停止切章，请核对本节任务点'); return;
+                if (skipping) { prompt.next.click(); confirmed = true; }
+                else { completedTasks.delete(oldTask); pause('平台仍提示有未完成任务，正在尝试恢复'); return; }
             }
+            if (uiTimedOut(navigationAt, 12000)) break;
             await D.delay(200);
         }
-        pause('平台未切换到下一节，已停止自动操作。');
+        pause('平台未切换到下一节，请手动导航。', false);
     }
     async function navigate(reason) {
         beforeClick();
@@ -576,7 +739,7 @@
             return;
         }
         if (record.priorResult === result.fingerprint && ['submitted', 'redo-clicked'].includes(record.phase)) {
-            if (Date.now() - record.at > 30000) throw new Error('成绩页没有更新，已停止，避免重复重做');
+            if (uiTimedOut(record.at, 30000)) throw new Error('成绩页没有更新，已停止，避免重复重做');
             return;
         }
         const questions = record.lastQuestions || [];
@@ -795,7 +958,7 @@
         }
         if (unknownTask !== courseTask()) { unknownTask = courseTask(); unknownSince = Date.now(); }
         // Allow newly loaded iframes to announce themselves; this is not the cancelled 30s wait.
-        if (Date.now() - unknownSince < 3000 || completedTasks.has(courseTask())) return;
+        if (!uiTimedOut(unknownSince, 3000) || completedTasks.has(courseTask())) return;
         busy = true;
         try {
             throw new Error('未识别到可确认完成的任务，已暂停，保留本节');
@@ -978,6 +1141,7 @@
         finally { responseWatch?.close(); if (videoQuizRun === currentEpoch) videoQuizRun = null; busy = false; inFlight = null; }
     }
     async function tick() {
+        if (unloaded) return;
         mount();
         if (!await syncQuietHours()) return;
         dismissInterruptions();
@@ -1002,7 +1166,7 @@
         if (!automatic || stopped || busy || !task) return;
         if (navigationContent && courseTask() !== navigationContent.task) {
             if (checkContent() === navigationContent.signature) {
-                if (Date.now() - navigationContent.at > 30000) pause('新章节仍显示旧检测内容，已停止，避免误跳章节。');
+                if (uiTimedOut(navigationContent.at, 30000)) pause('新章节仍显示旧检测内容，已停止，避免误跳章节。');
                 return;
             }
             navigationContent = null;
@@ -1024,13 +1188,13 @@
             if (D.enabled(document.querySelector('.btnSubmit.workBtnIndex')) && D.extract(document).length) {
                 if (record.phase === 'submitted') {
                     if (!record.confirmed) { busy = true; await finishSubmission(); return; }
-                    if (Date.now() - record.at > 30000) throw new Error('提交后未出现成绩，已停止，避免重复提交');
+                    if (uiTimedOut(record.at, 30000)) throw new Error('提交后未出现成绩，已停止，避免重复提交');
                     return;
                 }
                 if (record.phase === 'done') return;
                 await solve(true); return;
             }
-            if (!coursePage() && ['submitted', 'redo-clicked'].includes(record.phase) && Date.now() - record.at > 30000) throw new Error('平台页面未更新，已停止');
+            if (!coursePage() && ['submitted', 'redo-clicked'].includes(record.phase) && uiTimedOut(record.at, 30000)) throw new Error('平台页面未更新，已停止');
             if (coursePage() && pageReviewNeeded) {
                 const view = pageInventory();
                 if (expectedCheckTask === task || record.phase === 'done') await advanceCourse('已核对本页所有任务');
@@ -1057,7 +1221,7 @@
             if (entry.kind === 'check') {
                 if (pendingKnowledge(view)) return;
                 const question = view.questions.find(asset => !questionDone(asset));
-                if (question && question.root !== source) return;
+                if (!question || question.root !== source) return;
             }
             for (const [otherSource, other] of frames) if (other.running && otherSource !== source) {
                 post(otherSource, 'stop', { target: other.nonce }); other.running = false;
@@ -1076,8 +1240,10 @@
         if (video !== remoteVideo || identity !== remoteMediaIdentity) {
             remoteVideo = video; remoteMediaIdentity = identity; remoteMediaId = crypto.randomUUID(); remoteVideoEnded = false; remotePlayAttempts = 0;
             remoteVideoTask = '';
+            remoteSettlementMedia = ''; remoteSettlementRequests.clear();
         }
         report('video-ready', { mediaId: remoteMediaId, viewVisible: renderedInPage, ended: video.ended });
+        if (remoteSettlementMedia === remoteMediaId) return;
         if (Q.find(document)) return;
         if (!remoteVideoTask || !automatic || stopped || !coordinator || D.extract(document).length) return;
         applyMediaRate(video, remoteVideoRate);
@@ -1098,7 +1264,8 @@
         } catch { report('status', { task: remoteVideoTask, value: '正在等待新视频加载，尝试自动播放…' }); }
         finally { remotePlayBusy = false; }
     }
-    async function start() {
+    async function start({ recovery = false } = {}) {
+        if (!recovery) { recoverySerial++; recovering = false; inFlight?.abort(); }
         if (isTop && coursePage()) sessionStorage.setItem(autoKey, '1');
         if (quietNow()) { suspendForQuiet(); resumeAfterQuiet = true; notify('已预约：夜间休息中，07:00 后自动开始（北京时间）'); return; }
         stopped = false; automatic = true; navigationRequested = false; documentReportedTask = ''; epoch++;
@@ -1111,8 +1278,10 @@
             if (!checkStep() && expectedCheckTask !== courseTask()) expectedVideoTask = courseTask();
             completedTasks.delete(courseTask());
             for (const [source, entry] of frames) {
-                completedSenders.delete(entry.nonce);
-                if (entry.kind === 'document') completedDocumentSenders.delete(entry.nonce);
+                if (!recovery) {
+                    completedSenders.delete(entry.nonce);
+                    if (entry.kind === 'document') completedDocumentSenders.delete(entry.nonce);
+                }
                 if (entry.kind === 'video' ? canClaimVideo(source, entry) && !parentHasVideo() :
                     canClaim(source, entry) && (entry.kind !== 'document' || !F.find(document).length)) grant(source, entry, true);
             }
@@ -1136,9 +1305,10 @@
         if (window.app) { window.app.configs.autoplay = false; window.app._isPlaying = false; window.app._clearCheckInterval(); window.app._videoEl?.pause(); }
     }
     function stop() {
+        recoverySerial++; recovering = false;
         if (isTop && coursePage()) sessionStorage.removeItem(autoKey);
         resumeAfterQuiet = false;
-        pause('已停止自动答题。');
+        pause('已停止自动答题。', false);
         if (coursePage()) { stopPlayer(); for (const [source, entry] of controlledFrames()) post(source, 'stop', { target: entry.nonce }); }
         if (!isTop && !coursePage()) report('stop');
     }
@@ -1155,11 +1325,14 @@
                     if (action === 'stop') stop();
                     if (action === 'start') await start();
                     if (action === 'solve') {
+                        recoverySerial++; recovering = false; inFlight?.abort();
+                        automatic = false; stopped = true; stopPlayer();
+                        if (coursePage()) for (const [source, entry] of controlledFrames()) post(source, 'stop', { target: entry.nonce });
                         if (quietNow()) { notify('夜间休息中，07:00 后可调用 AI'); return; }
                         if (busy) return;
                         if (!D.extract(document).length) throw new Error('请在检测题目页点击“仅看答案”');
                         stopped = false; automatic = false; epoch++;
-                        if (!isTop && !coursePage()) report('pause', { reason: '已切换为仅看答案，自动提交停止。', task });
+                        if (!isTop && !coursePage()) report('pause', { reason: '已切换为仅看答案，自动提交停止。', task, manual: true });
                         await solve(false);
                     }
                     if (action === 'connect') {
@@ -1172,8 +1345,12 @@
         }
         const output = document.createElement('pre'); output.style.cssText = 'white-space:pre-wrap;word-break:break-word;font:inherit;margin:0';
         const details = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = '查看发送给 AI 的题目截图'; details.append(summary);
+        const runLog = document.createElement('details'); runLog.dataset.skippedLog = 'true';
+        const logTitle = document.createElement('summary'); logTitle.textContent = '跳过记录';
+        const logNote = document.createElement('p'); logNote.textContent = '自动异常每章先测试 AI 并重新开始一次（短请求可能计费），再次失败则记录待复核并继续。跳过不等于平台已完成。记录仅保存在当前浏览器，显示最近20项。';
+        runLog.append(logTitle, logNote, document.createElement('ul'));
         panel.append(actions, output, details);
-        themeStatus = XxtAssistantTheme.decorate(panel, { title, actions, output, details, playbackRate: getPlaybackRate(), onRateChange: changePlaybackRate, muted: getMuted(), onMutedChange: changeMuted,
+        themeStatus = XxtAssistantTheme.decorate(panel, { title, actions, output, details, runLog, playbackRate: getPlaybackRate(), onRateChange: changePlaybackRate, muted: getMuted(), onMutedChange: changeMuted,
             onAiChange: () => { stop(); notify('AI 配置已更改，请测试后重新开始自动。'); }, onQuietChange: () => syncQuietHours().catch(error => pause(error.message)) });
         document.body.append(panel); notify(messageValue);
         if (coordinator && !coursePage()) panel.hidden = true;
@@ -1298,8 +1475,8 @@
                 if (automatic && !stopped) grant(event.source, frames.get(event.source));
             }
             if (data.type === 'start') { automatic = true; stopped = false; setTask(courseTask()); frames.set(event.source, { nonce: data.nonce }); grant(event.source, frames.get(event.source), true); }
-            if (data.type === 'stop') { resumeAfterQuiet = false; pause(data.reason || '自动模式已停止。'); }
-            if (data.type === 'pause') pause(data.reason || '自动模式已停止。');
+            if (data.type === 'stop') { recoverySerial++; resumeAfterQuiet = false; pause(data.reason || '自动模式已停止。', false); }
+            if (data.type === 'pause') pause(data.reason || '自动模式已停止。', data.manual !== true);
             if (data.type === 'finished' && automatic && data.task === courseTask() && frames.get(event.source)?.kind === 'check' &&
                 frames.get(event.source)?.nonce === data.nonce && !completedSenders.has(data.nonce)) {
                 completedSenders.add(data.nonce); pageReviewNeeded = true; advanceCourse(data.reason).catch(error => pause(error.message));
@@ -1321,6 +1498,16 @@
                 if (typeof data.muted === 'boolean') selectedMuted = data.muted;
                 if (data.resume) stopped = false;
                 if (!stopped) automatic = true;
+            }
+            if (data.type === 'settle-video' && data.task === remoteVideoTask && data.mediaId === remoteMediaId &&
+                automatic && !stopped && !quietNow() && renderedInPage !== false && !Q.find(document)) {
+                const key = `${data.task}/${data.mediaId}`;
+                if (remoteSettlementRequests.has(key)) return;
+                const replay = P?.replayControl(remoteVideo);
+                if (replay) {
+                    remoteSettlementRequests.add(key); remoteSettlementMedia = remoteMediaId;
+                    replay.click();
+                }
             }
             if (data.type === 'set-playback-rate' && (data.task === task || data.task === remoteVideoTask)) {
                 selectedPlaybackRate = XxtCodexCore.normalizePlaybackRate(data.rate); syncPlaybackRate();
@@ -1387,6 +1574,8 @@
         }
     };
     window.addEventListener('message', handleMessage);
+    document.addEventListener('visibilitychange', recheckForeground);
+    window.addEventListener('focus', recheckForeground);
     mount();
     // Preserve only an explicitly started run, in this tab and this course.
     // Stops/errors clear it; first visits and other courses never auto-submit.

@@ -27,10 +27,16 @@ test('Xiaomi and Doubao use thinking.type, Qwen enable_thinking',()=>{
         const b=build(p,m,'enabled'); assert.deepEqual(b.thinking,{type:'enabled'}); assert(!b.reasoning_effort);
     }
     const b=build('qwen','qwen3.8-flash','disabled'); assert.equal(b.enable_thinking,false); assert(!b.thinking); assert(!b.reasoning_effort);
+    assert.equal(build('qwen','qwen3.8-27b','disabled').enable_thinking,false);
+    assert.throws(()=>build('qwen','qwen3.8-2.4t-a95b','disabled'),/不支持/);
+    assert.equal(C.model('qwen','qwen3.8-2.4t-a95b').vision,false);
+    assert.equal(build('qwen','qwen3.8-omni-flash').reasoning_effort,undefined);
 });
 test('native OpenAI, Claude and Gemini use distinct effort locations',()=>{
     assert.deepEqual(build('openai','gpt-6-luna','max').reasoning,{effort:'max'});
     assert.throws(()=>build('openai','gpt-6-astra','none'),/不支持/);
+    assert.deepEqual(build('openai','gpt-6-sol','none').reasoning,{effort:'none'});
+    assert.throws(()=>build('openai','gpt-6.1-sol','none'),/不支持/);
     const claude=build('claude','claude-sonnet-5-5','xhigh'); assert.deepEqual(claude.output_config,{effort:'xhigh'}); assert(!claude.reasoning);
     assert.deepEqual(build('gemini','gemini-3.8-flash','medium').generationConfig.thinkingConfig,{thinkingLevel:'medium'});
 });

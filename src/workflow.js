@@ -21,7 +21,7 @@
     let messageValue = '展开“AI 接口设置”填写服务商、模型和 Key，再测试 AI。';
     let epoch = 0, frameClaimAt = 0, frameClaimTask = '', grantAt = 0, unloaded = false, parentManaged = false, navigationContent = null;
     let coordinator = null, coordinatorDistance = Infinity, expectedCheckTask = '', expectedVideoTask = '', navigationRequested = false;
-    let expectedDocumentTask = '', documentReportedTask = '', openedDocument = null, documentOwner = null;
+    let expectedDocumentTask = '', documentReportedTask = '', openedDocument = null, documentOwner = null, grantedDocumentIds = null;
     let topicOwner = null, topicReportedTask = '';
     let pageReviewNeeded = false, pageSignature = '', pageChangedAt = 0, pageBlockedAt = 0;
     let pageVideo = null, pagePlaying = false, stepTransition = null, currentCard = '', stepDone = new Set();
@@ -91,6 +91,8 @@
         return `${tabId}/${location.origin}/${course}/${clazz}/${index}/${name?.getAttribute('title') || D.text(name)}`;
     }
     function checkStep() {
+        const steps = P?.steps(document), current = steps?.items[steps.index];
+        if (current && /学习检测|学习测验|章节测验/.test(current.label)) return true;
         const el = document.querySelector('.prev_title');
         return /学习检测|学习测验|章节测验/.test(el?.title || D.text(el));
     }
@@ -185,6 +187,19 @@
             // Let the failed solver unwind before issuing the one bounded probe.
             await D.delay(200);
             if (!valid()) return;
+            // The coordinator reads the first unresolved file, one at a time.
+            // A later optional sibling must not absorb a required file's error.
+            const optionalFile = pageInventory()?.documents.find(asset => !fileDone(asset));
+            if (optionalFile?.entry?.taskPoint === 'optional' && /^文献任务(?:尚)?未完成/.test(reason)) {
+                // No platform obligation exists for this supplementary file.
+                // Treat it as handled, without inventing credit or a failed job.
+                completedFileAssets.add(optionalFile.id);
+                pageBlockedAt = 0; unknownSince = 0; unknownTask = '';
+                notify('拓展资料未设任务点，继续本章其他内容；不记为任务未完成。');
+                recovering = false;
+                await start({ recovery: true });
+                return;
+            }
             if (!recoveryAttempts.has(context)) {
                 recoveryAttempts.add(context);
                 notify(`遇到问题：${reason}。自动测试 AI 并重新开始一次…`);
@@ -444,6 +459,7 @@
         if (pendingMarker) return blockPage(pendingMarker.kind === 'unknown' ? '存在无法识别且尚未完成的任务点' : '正在等待平台确认本页知识任务点完成');
         pageBlockedAt = 0;
         const question = view.questions.find(asset => !questionDone(asset));
+        if (question) { expectedCheckTask = task; expectedVideoTask = ''; }
         if (question && question.win !== pageWindow) {
             question.frame?.scrollIntoView({ block: 'center', behavior: 'auto' });
             const agent = [...frames].find(([source, entry]) => entry.kind === 'check' && source === question.win);
@@ -451,6 +467,8 @@
             else notify('等待本页检测组件接入…');
             return true;
         }
+        if (!view.questions.length && (view.markers.some(marker => marker.kind === 'check' && !marker.done) || checkStep()))
+            return blockPage('学习检测已打开，正在等待题目组件加载或识别');
         if ((skippedAssets.size || skippedMarkers.size) && !pendingKnowledge(view) && view.questions.every(questionDone)) {
             await advanceCourse('已处理可识别任务，其余已记录待复核'); return true;
         }
@@ -788,7 +806,8 @@
         if (!coursePage()) return false;
         if (stopped || quietNow() || hasVideoQuiz()) return true;
         pageReviewNeeded = true;
-        if (transitionBlocked(true)) return true;
+        if (transitionBlocked(false)) return true;
+        if (pageInventory()?.questions.some(asset => !questionDone(asset))) return true;
         const nativeVideo = window.app?._getVideoEl?.();
         if (nativeVideo && !nativeVideo.ended) return true;
         const currentTask = courseTask();
@@ -820,7 +839,10 @@
     async function continueKnowledge(reason) {
         beforeClick();
         if (coursePage()) {
-            if (transitionBlocked(true)) return;
+            // Entering the check step cannot require that same check's icon to
+            // be completed already. Inline checks still run before a card change.
+            if (transitionBlocked(false)) return;
+            if (pageInventory()?.questions.some(asset => !questionDone(asset))) return;
             if (nextStudyStep()) return;
             pageReviewNeeded = false;
             expectedDocumentTask = ''; expectedVideoTask = '';
@@ -864,7 +886,7 @@
     }
     async function readDocuments(override) {
         if (!override && (D.extract(document).length || D.readResult(document) || (coursePage() && expectedCheckTask === courseTask()))) return false;
-        const entries = override || F.find(document);
+        const entries = override || F.find(document).filter(entry => !grantedDocumentIds || grantedDocumentIds.includes(entry.id));
         const already = new Set(GM_getValue(`xxt-documents:${task}`, []) || []);
         if (!entries.length || entries.every(entry => already.has(entry.id))) return false;
         if (coursePage()) expectedDocumentTask = courseTask();
@@ -914,10 +936,10 @@
                 }
                 openedDocument = null;
                 completed.add(entry.id); GM_setValue(`xxt-documents:${task}`, [...completed]);
-                notify(`已关闭文献预览：${entry.label}`);
+                notify(entry.taskPoint === 'optional' || P?.taskPoint(entry.element) === 'optional'
+                    ? `拓展资料已阅读（未设任务点）：${entry.label}` : `已关闭文献预览：${entry.label}`);
             }
             documentReportedTask = task;
-            await afterDocuments(entries.map(entry => entry.id));
         } catch (error) {
             if (!stopped && automatic && !quietNow() && currentEpoch === epoch) {
                 closeDocument(); documentReportedTask = task;
@@ -925,6 +947,9 @@
                 else { report('document-unrecognized', { task, reason: error.message }); automatic = false; }
             } else throw error;
         } finally { closeDocument(); busy = false; }
+        // Navigation/check readiness is separate from reading success. Never
+        // relabel a successfully read optional document as an unfinished task.
+        await afterDocuments(entries.map(entry => entry.id));
         return true;
     }
     function suspendForQuiet() {
@@ -1207,6 +1232,7 @@
         finally { if (!inFlight) busy = false; }
     }
     function grant(source, entry, resume = false) {
+        let documentIds;
         if (coursePage() && P) {
             if (parentReadingFiles) return;
             if (stepTransition) return;
@@ -1217,6 +1243,9 @@
                 if (video) return;
                 const file = view.documents.find(asset => !fileDone(asset));
                 if (!file || !covers(file, source, 'document')) return;
+                // Grant only the selected file when its ID is known in this
+                // worker's document. A skipped sibling must not be reopened.
+                if (file.entry && file.win === source) documentIds = [file.entry.id];
             }
             if (entry.kind === 'check') {
                 if (pendingKnowledge(view)) return;
@@ -1229,7 +1258,7 @@
             resume ||= !entry.running; entry.running = true;
         }
         post(source, entry.kind === 'video' ? 'grant-video' : entry.kind === 'document' ? 'grant-document' : 'grant', { target: entry.nonce, task: courseTask(), resume,
-            rate: getPlaybackRate(), muted: getMuted(), mediaId: entry.mediaId });
+            rate: getPlaybackRate(), muted: getMuted(), mediaId: entry.mediaId, documentIds });
     }
     async function tickRemoteVideo() {
         if (quietNow()) { remoteVideo?.pause(); return; }
@@ -1489,6 +1518,7 @@
             if (data.type === 'grant' || data.type === 'grant-document') {
                 const newlyGranted = !parentManaged || task !== data.task || data.resume;
                 grantAt = Date.now(); parentManaged = true;
+                if (data.type === 'grant-document') grantedDocumentIds = Array.isArray(data.documentIds) && data.documentIds.every(id => typeof id === 'string') ? data.documentIds : null;
                 if (data.resume) { stopped = false; navigationRequested = false; if (data.type === 'grant-document') documentReportedTask = ''; }
                 if (!stopped) { setTask(data.task); automatic = true; if (newlyGranted) notify('检测页已接管，正在读取平台成绩或题目…'); }
             }
@@ -1562,7 +1592,8 @@
             if (hasVideoQuiz()) return true;
             if (quietNow()) return true;
             if (stopped) return true;
-            if (transitionBlocked(true)) return true;
+            if (transitionBlocked(false)) return true;
+            if (pageInventory()?.questions.some(asset => !questionDone(asset))) return true;
             if (expectedCheckTask === courseTask()) return true;
             if (!coursePage() || completedTasks.has(courseTask())) return false;
             if (nextStudyStep()) return true;

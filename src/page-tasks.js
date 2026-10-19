@@ -4,6 +4,10 @@
 (() => {
     const D = XxtCodexDom, F = XxtCodexDocuments;
     const ownIcons = container => [...container.querySelectorAll('.ans-job-icon')].filter(el => el.closest('.ans-attach-ct') === container);
+    function taskPoint(element) {
+        const container = element?.closest('.ans-attach-ct');
+        return !container ? 'unknown' : ownIcons(container).length ? 'required' : 'optional';
+    }
     function complete(container) {
         return !!container && (container.classList.contains('ans-job-finished') ||
             ownIcons(container).some(el => el.getAttribute('aria-label') === '任务点已完成'));
@@ -15,13 +19,14 @@
             let doc;
             try { doc = win.document; if (!doc?.body) return; } catch { return; }
             const files = skipDocuments ? [] : F.find(doc);
-            for (const entry of files) documents.push({ id: `document:${path}/${entry.id}`, entry, win,
-                root: entry.element.tagName === 'IFRAME' ? entry.element.contentWindow : win });
+            for (const found of files) { const entry = { ...found, taskPoint: taskPoint(found.element) }; documents.push({ id: `document:${path}/${entry.id}`, entry, win,
+                root: entry.element.tagName === 'IFRAME' ? entry.element.contentWindow : win }); }
             for (const [index, video] of [...doc.querySelectorAll('video')].filter(D.visible).entries()) {
                 videos.push({ id: `video:${path}/${owner?.getAttribute('jobid') || owner?.getAttribute('objectid') || index}`,
                     video, win, root: win, container: owner?.closest('.ans-attach-ct') || video.closest('.ans-attach-ct') });
             }
-            if (D.extract(doc).some(entry => D.visible(entry.element)) || D.readResult(doc)) questions.push({ id: `check:${path}`, win, root: win, frame: owner });
+            const forms = D.extract(doc).filter(entry => D.visible(entry.element)).map(entry => entry.element);
+            if (forms.length || D.readResult(doc)) questions.push({ id: `check:${path}`, win, root: win, frame: owner, forms });
             for (const wrapper of doc.querySelectorAll('.ans-attach-ct')) {
                 const icon = ownIcons(wrapper)[0];
                 // Folded required tasks still block completion; a hidden container is
@@ -47,6 +52,14 @@
             }
         }
         visit(root, 'root');
+        // A quiz may be inline or hosted behind a generic loader URL. Its
+        // pending icon is the thing to complete by answering, not a knowledge
+        // prerequisite. Attribute only to the form's own wrapper/frame.
+        for (const marker of markers) if (marker.kind === 'unknown' && questions.some(question =>
+            question.forms.some(form => form.closest('.ans-attach-ct') === marker.element) ||
+            question.frame?.closest('.ans-attach-ct') === marker.element)) marker.kind = 'check';
+        for (const marker of markers) if (marker.kind === 'unknown' && documents.some(asset =>
+            asset.entry.element.closest('.ans-attach-ct') === marker.element)) marker.kind = 'document';
         return { videos, documents, questions, markers, loading,
             signature: JSON.stringify([videos.map(x => x.id), documents.map(x => x.id), questions.map(x => x.id), markers.map(x => x.kind)]) };
     }
@@ -65,5 +78,5 @@
             D.visible(button) && !button.disabled && button.getAttribute('aria-disabled') !== 'true' &&
             (button.title === '重播' || D.text(button).trim() === '重播')) || null;
     }
-    globalThis.XxtPageTasks = { scan, complete, steps, replayControl };
+    globalThis.XxtPageTasks = { scan, complete, steps, replayControl, taskPoint };
 })();

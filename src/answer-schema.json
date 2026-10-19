@@ -1,20 +1,48 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["answers"],
+  "required": [
+    "answers"
+  ],
   "properties": {
     "answers": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "choices", "readable", "confidence", "explanation"],
+        "required": [
+          "id",
+          "choices",
+          "readable",
+          "confidence",
+          "explanation",
+          "texts"
+        ],
         "properties": {
-          "id": {"type": "string"},
-          "choices": {"type": "array", "items": {"type": "string"}},
-          "readable": {"type": "boolean"},
-          "confidence": {"type": "number"},
-          "explanation": {"type": "string"}
+          "id": {
+            "type": "string"
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "readable": {
+            "type": "boolean"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "texts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       }
     }

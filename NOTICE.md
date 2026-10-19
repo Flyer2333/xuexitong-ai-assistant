@@ -16,3 +16,5 @@
 若要为整个项目选择开源许可证，需先明确上游文件与新增文件的权利范围。本说明不能替代所需授权。
 
 可选奶龙和奶蛙主题使用的角色图片另列于 [主题素材说明](assets/themes/README.md)，不属于项目代码许可范围。
+
+1.1.0 的分流、批次、诊断和集中补做设计参考了 [zhu-hailin/chaoxing-ai-assistant](https://github.com/zhu-hailin/chaoxing-ai-assistant/tree/343ee48228f5109b2be7ccddc1449cc8e3842ebd)。审阅时未发现该仓库的项目级许可证，因此本项目独立实现这些设计，没有复制其源码或引入其字体解密依赖。该说明不改变上述既有上游代码的许可边界。

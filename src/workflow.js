@@ -20,6 +20,16 @@
     const autoKey = `xxt-auto:${location.origin}/${courseParams.get('courseId') || courseParams.get('courseid') || ''}/${courseParams.get('clazzid') || courseParams.get('clazzId') || ''}`;
     let panel, themeStatus, automatic = false, busy = false, stopped = false, task = '', record = {}, inFlight;
     const aiEnabled = () => GM_getValue('xxt-ai-enabled', !!GM_getValue('xxt-ai-config', {})?.key);
+    const ledgerScope = `${autoKey}/${courseParams.get('cpi') || courseParams.get('personid') || tabId}`;
+    const ledgerValid=()=>{const p=new URLSearchParams(location.search);return location.origin===new URL(autoKey.slice('xxt-auto:'.length)).origin &&
+        (p.get('courseId')||p.get('courseid')||'')===(courseParams.get('courseId')||courseParams.get('courseid')||'') &&
+        (p.get('clazzid')||p.get('clazzId')||'')===(courseParams.get('clazzid')||courseParams.get('clazzId')||'') &&
+        !!(p.get('cpi')||p.get('personid')) && (p.get('cpi')||p.get('personid'))===(courseParams.get('cpi')||courseParams.get('personid'));};
+    let retryQueue=null;
+    const locator=XxtLocator.create();
+    const catalogSnapshot=()=>locator.catalog(document.querySelector('#coursetree'));
+    const diagnostics = XxtDiagnostics.create({read:()=>GM_getValue('xxt-diagnostics',[]),write:value=>GM_setValue('xxt-diagnostics',value)});
+    globalThis.XxtRequestProgress = info => { if (!stopped && !quietNow()) notify(`正在调用${info.kind === 'vision' ? '视觉' : info.kind === 'text' ? '文字' : '当前'}模型：第 ${info.batch}/${info.total} 批，共 ${info.count} 题…`); };
     let messageValue = '选择“不接入 AI”可直接开始；需要自动答题时再接入 AI。';
     let epoch = 0, frameClaimAt = 0, frameClaimTask = '', grantAt = 0, unloaded = false, parentManaged = false, navigationContent = null;
     let coordinator = null, coordinatorDistance = Infinity, expectedCheckTask = '', expectedVideoTask = '', navigationRequested = false;
@@ -111,15 +121,16 @@
         const log = panel?.querySelector('[data-skipped-log]');
         if (log) {
             const entries = GM_getValue(`xxt-skipped:${autoKey}`, []) || [];
-            log.querySelector('summary').textContent = `跳过记录 · ${entries.length} 项待复核`;
+            log.querySelector('summary').textContent = `跳过记录 · ${entries.filter(x=>x.status!=='reviewed').length} 项待复核`;
             const list = log.querySelector('ul'); list.replaceChildren();
-            for (const entry of entries.slice(-20)) { const item = document.createElement('li'); item.textContent = `${entry.chapter}：${entry.reason}`; list.append(item); }
+            for (const entry of entries.slice(-20)) { const item = document.createElement('li'); item.textContent = `${entry.status==='reviewed'?'[已复核] ':''}${entry.chapter}：${entry.reason}`; list.append(item); }
         }
         if (coordinator && !coursePage()) post(coordinator, 'status', { task, value });
     }
     function save() { if (task) GM_setValue(`xxt-check:${task}`, record); }
     function setTask(value) {
         if (task === value) return;
+        if(retryQueue?.current){const active=catalogSnapshot().find(x=>x.node.classList.contains('posCatalog_active'));if(active&&(active.index!==retryQueue.current.index||active.title!==retryQueue.current.title)){retryQueue=null;automatic=false;stopped=true;notify('检测到手动切章，已取消集中补做。');}}
         topicOwner?.cancel(); topicOwner = null; topicReportedTask = '';
         pageReviewNeeded = false; pageSignature = ''; pageChangedAt = Date.now(); pageBlockedAt = 0;
         stepTransition = null; currentCard = ''; stepDone = new Set(); pageVideo = null;
@@ -161,13 +172,15 @@
         return true;
     }
     function pause(reason, allowRecovery = true) {
+        locator.clear();
+        if (allowRecovery) diagnostics.record(reason,{phase:'recovery'});
         const recover = allowRecovery && coursePage() && automatic && !stopped && !recovering && !unloaded;
         const recoveryReason = String(reason).replace(/[，,]?已暂停.*$/, '').replace(/[，,]?已停止[。.]?$/, '');
         if (quietPaused && quietNow()) { notify('夜间休息中（23:00—07:00，北京时间）'); return; }
         if (isTop && coursePage()) sessionStorage.removeItem(autoKey);
         closeDocument(); topicOwner?.cancel(); topicOwner = null;
         cancelConfirmation(); pendingConfirmations.clear();
-        automatic = false; stopped = true; epoch++; inFlight?.abort();
+        automatic = false; stopped = true; epoch++; inFlight?.abort(); XxtAi.cancelImageTest();
         record.paused = true; save(); notify(recover ? `${recoveryReason}，准备自动恢复…` : reason);
         if (coursePage()) { stopPlayer(); for (const [source, entry] of controlledFrames()) post(source, 'stop', { target: entry.nonce }); }
         if (!isTop && !coursePage()) report('pause', { reason, task });
@@ -178,8 +191,10 @@
         const chapter = D.text(document.querySelector('#coursetree .posCatalog_active .posCatalog_name')) || '当前章节';
         const key = `xxt-skipped:${autoKey}`;
         const list = GM_getValue(key, []) || [];
-        list.push({ chapter, reason: String(reason).slice(0, 300), at: Date.now() });
-        GM_setValue(key, list.slice(-100));
+        const current=catalogSnapshot().find(x=>x.node.classList.contains('posCatalog_active'));
+        const entry={chapter,title:current?.title || chapter,index:current?.index ?? -1,scope:ledgerScope,reason:String(reason).slice(0,300),at:Date.now(),
+            uncertainSubmission:['submitted','redo-clicked'].includes(record.phase) || /提交|判题|成绩.*(?:未|没有|尚)|重做.*确认/.test(reason)};
+        GM_setValue(key, XxtRunLedger.record(list,entry));
         notify(`已记录待复核：${chapter}，${reason}。继续处理其余内容…`);
     }
     async function recoverAutomatic(reason) {
@@ -322,7 +337,7 @@
         if (currentCard === id) return;
         if (currentCard) {
             for (const [source, entry] of controlledFrames()) post(source, 'stop', { target: entry.nonce });
-            epoch++; inFlight?.abort(); closeDocument(); topicOwner?.cancel(); topicOwner = null;
+            epoch++; inFlight?.abort(); XxtAi.cancelImageTest(); closeDocument(); topicOwner?.cancel(); topicOwner = null;
             frames.clear(); quizFrames.clear(); stopPlayer();
             record = {}; save();
         }
@@ -513,9 +528,10 @@
     function request(path, payload) {
         if (!aiEnabled()) throw new Error('不接入 AI 模式不会发送模型请求');
         const job = XxtAi.request(path, payload); inFlight = job;
-        return job.promise;
+        return job.promise.catch(error=>{diagnostics.record(error,{phase:'request'});throw error;});
     }
     function beforeClick() {
+        if(retryQueue&&!ledgerValid()){retryQueue=null;stopped=true;automatic=false;throw new Error('课程或账号标识已变化，补做已取消');}
         if (quietNow()) { suspendForQuiet(); throw new Error('夜间休息中，暂停自动操作'); }
         if (stopped || !automatic) throw new Error('自动操作已停止');
         if (!task) throw new Error('检测上下文缺失');
@@ -635,7 +651,8 @@
     }
     function showPreviews(images) {
         if (!panel) return;
-        const details = panel.querySelector('details'); details.querySelectorAll('img').forEach(img => img.remove());
+        const details = panel.querySelector('[data-question-previews]');if(!details)return;details.querySelectorAll('img').forEach(img => img.remove());
+        details.querySelector('summary').textContent=images.length?'查看发送给 AI 的题目截图':'本次为文字题，未发送截图';
         for (const data of images) { const img = document.createElement('img'); img.src = data; img.style.width = '100%'; details.append(img); }
     }
     function retryAttempts() {
@@ -656,24 +673,25 @@
             if (submit) beforeClick();
         };
         try {
-            XxtCodexCore.validateQuestions(questions);
+            XxtCodexCore.validateQuestions(questions, 200);
             const learned = XxtCodexCore.recallAnswers(questions, record.knownAnswers || []);
             const retryPlan = XxtRetry.plan(questions, retryAttempts());
             const pendingEntries = entries.filter(entry => !learned.some(answer => answer.id === entry.question.id));
             const pendingQuestions = pendingEntries.map(entry => entry.question);
-            if (submit && retryPlan.forbidden.length) {
+            if (submit && retryPlan.forbidden.length && questions.every(q=>!['blank','essay'].includes(q.type))) {
                 const seed = questions.map(q => learned.find(a => a.id === q.id) || { id: q.id, choices: [q.options[0].key] });
                 if (XxtRetry.novel(questions, seed, retryPlan.forbidden, learned).exhausted) { await navigate('保留平台已确认答案后，其余可区分的答案组合均已尝试'); return; }
             }
-            notify(pendingEntries.length ? `正在读取 ${pendingEntries.length} 道题的截图（${learned.length} 道已有平台正确答案）…` : '已读取全部平台正确答案，直接填写…');
-            await XxtQuestionCapture.readyFonts(document, assertCurrent);
-            const images = [];
-            for (const entry of pendingEntries) {
+            const visualEntries = GM_getValue('xxt-ai-routing', true) ? pendingEntries.filter(entry => XxtDispatch.needsVision(entry.question)) : pendingEntries;
+            notify(pendingEntries.length ? `已读取 ${pendingEntries.length} 道题，其中 ${visualEntries.length} 道需要截图（${learned.length} 道已有平台正确答案）…` : '已读取全部平台正确答案，直接填写…');
+            if (visualEntries.length) await XxtQuestionCapture.readyFonts(document, assertCurrent);
+            const images = [], imageQuestionIds = [];
+            for (const entry of visualEntries) {
                 assertCurrent();
                 if (!D.visible(entry.element)) throw new Error('题目区域不可见');
                 const image = await XxtQuestionCapture.capture(entry.element, { guard: assertCurrent,
                     ignoreElements: el => !!el.hasAttribute?.('data-xxt-codex-panel') });
-                images.push(image);
+                images.push(image); imageQuestionIds.push(entry.question.id);
             }
             assertCurrent(); showPreviews(images);
             let modelAnswers = [];
@@ -681,8 +699,8 @@
             if (pendingQuestions.length) {
                 let history = retryPlan.history;
                 for (let revision = 0; revision < 3; revision++) {
-                    notify(revision ? `AI返回了已失败组合，正在对比得分重新推理（复核 ${revision}/2）…` : 'AI 正在阅读截图，对比历史选择和得分作答…');
-                    const response = await request('/solve', { questions: pendingQuestions, images, history });
+                    notify(revision ? `AI返回了已失败组合，正在对比得分重新推理（复核 ${revision}/2）…` : 'AI 正在按题目内容分流作答，对比历史选择和得分…');
+                    const response = await request('/solve', { questions: pendingQuestions, images, imageQuestionIds, history });
                     assertCurrent();
                     modelAnswers = XxtCodexCore.resolveAnswers(pendingQuestions, response, { randomizeUncertain: submit });
                     answers = questions.map(question => [...learned, ...modelAnswers].find(answer => answer.id === question.id));
@@ -698,13 +716,13 @@
                 answers = fresh.answers;
                 if (retryPlan.repeated(answers)) throw new Error('已拦截重复的失败答案组合，停止提交');
             }
-            notify(answers.map(answer => `第 ${questions.findIndex(q => q.id === answer.id) + 1} 题：${answer.choices.join('、') || '不确定'}${answer.randomized ? '（随机）' : ''}\n${answer.explanation}`).join('\n\n'));
+            notify(answers.map(answer => `第 ${questions.findIndex(q => q.id === answer.id) + 1} 题：${(answer.texts || answer.choices).join('、') || '不确定'}${answer.randomized ? '（随机）' : ''}\n${answer.explanation}`).join('\n\n'));
             if (!submit) return;
             await D.applyAnswers(entries, answers, assertCurrent);
             const button = D.unique([...document.querySelectorAll('.btnSubmit.workBtnIndex')].filter(D.enabled));
             if (!button) throw new Error('提交按钮缺失或不唯一，已停止');
             assertCurrent();
-            record.lastAnswers = answers.map(({ id, choices }) => ({ id, choices }));
+            record.lastAnswers = answers.map(({ id, choices, texts }) => ({ id, choices, ...(texts?{texts}:{}) }));
             record.lastQuestions = questions;
             record.randomized = answers.filter(answer => answer.randomized).map(answer => answer.id);
             record.submissions = (record.submissions || 0) + 1;
@@ -717,6 +735,34 @@
         } catch (error) { if (!unloaded) pause(error.message); }
         finally { busy = false; inFlight = null; }
     }
+    async function nextRetryChapter(skipping) {
+        const queue=retryQueue;if(!queue)return;
+        if(!ledgerValid()){retryQueue=null;pause('课程或账号标识无法确认，补做已取消。',false);return;}
+        if(queue.current){
+            const key=`xxt-skipped:${autoKey}`,old=GM_getValue(key,[]);
+            GM_setValue(key,old.map(x=>x.scope===ledgerScope&&XxtRunLedger.identity(x)===XxtRunLedger.identity(queue.current)?{...x,status:skipping?'pending':'reviewed'}:x));
+        }
+        const next=queue.remaining.shift();
+        if(!next){retryQueue=null;pause('本轮集中补做已结束；未确认完成的记录仍保留待复核。',false);return;}
+        if(quietNow()){retryQueue=null;suspendForQuiet();return;}
+        const current=catalogSnapshot()[next.index];
+        if(!current||current.title!==next.title||!D.enabled(current.node)){retryQueue=null;pause('目录已变化，补做队列已取消，请检查后重新选择。',false);return;}
+        queue.current=next;
+        automatic=false;stopped=true;epoch++;inFlight?.abort();XxtAi.cancelImageTest();
+        const prior=courseTask();navigationContent={task:prior,signature:checkContent(),at:Date.now()};
+        current.node.click();
+        const since=Date.now();
+        while(retryQueue===queue){
+            if(quietNow()){retryQueue=null;suspendForQuiet();return;}
+            const active=catalogSnapshot().find(x=>x.node.classList.contains('posCatalog_active'));
+            if(active?.index===next.index&&active.title===next.title){
+                skippedChapters.delete(courseTask());completedTasks.delete(courseTask());recoveryAttempts.delete(courseTask());
+                await start({recovery:true});return;
+            }
+            if(Date.now()-since>12000){retryQueue=null;pause('补做章节未能打开，请手动进入后重试。',false);return;}
+            await D.delay(200);
+        }
+    }
     async function advanceCourse(reason, forceSkip = false) {
         const skipping = forceSkip || skippedChapters.has(courseTask()) || skippedAssets.size > 0 || skippedMarkers.size > 0;
         if (!forceSkip && hasVideoQuiz()) { notify('视频弹题尚未结束，等待作答后再切节。'); return; }
@@ -727,6 +773,7 @@
         const oldTask = courseTask();
         if (completedTasks.has(oldTask)) return;
         completedTasks.add(oldTask);
+        if (retryQueue) { await nextRetryChapter(skipping); return; }
         const currentEpoch = epoch;
         const pendingPrompt = D.ancestorNavigationPrompt(pageWindow);
         let next = pendingPrompt ? null : D.findNext(document);
@@ -988,8 +1035,10 @@
     }
     function suspendForQuiet() {
         if (quietPaused) return;
+        locator.clear();
+        retryQueue=null;
         quietPaused = true; resumeAfterQuiet = automatic;
-        automatic = false; stopped = true; unknownSince = 0; unknownTask = ''; epoch++; inFlight?.abort();
+        automatic = false; stopped = true; unknownSince = 0; unknownTask = ''; epoch++; inFlight?.abort(); XxtAi.cancelImageTest();
         closeDocument(); topicOwner?.rest(); cancelConfirmation(); pendingConfirmations.clear();
         stopPlayer(); remoteVideo?.pause();
         if (coursePage()) for (const [source, entry] of controlledFrames()) post(source, 'quiet-rest', { target: entry.nonce, resume: resumeAfterQuiet });
@@ -1102,13 +1151,17 @@
                         const seed = [{ id: entry.question.id, choices: [entry.question.options[0].key] }];
                         if (XxtRetry.novel([entry.question], seed, retryPlan.forbidden).exhausted)
                             throw new Error('视频弹题的可区分答案组合均已尝试，已暂停，请核对题目或平台反馈');
-                        await XxtQuestionCapture.readyFonts(panel.ownerDocument, assertQuestion); assertQuestion();
-                        const image = await XxtQuestionCapture.capture(panel, { guard: assertQuestion, backgroundColor: '#171717',
-                            ignoreElements: el => el.tagName === 'VIDEO' || !!el.closest?.('[data-xxt-codex-panel]') });
-                        assertQuestion(); showPreviews([image]);
+                        const images = [], imageQuestionIds = [];
+                        if (!GM_getValue('xxt-ai-routing', true) || XxtDispatch.needsVision(entry.question)) {
+                            await XxtQuestionCapture.readyFonts(panel.ownerDocument, assertQuestion); assertQuestion();
+                            images.push(await XxtQuestionCapture.capture(panel, { guard: assertQuestion, backgroundColor: '#171717',
+                                ignoreElements: el => el.tagName === 'VIDEO' || !!el.closest?.('[data-xxt-codex-panel]') }));
+                            imageQuestionIds.push(entry.question.id);
+                        }
+                        assertQuestion(); showPreviews(images);
                         let history = retryPlan.history;
                         for (let revision = 0; revision <= 2; revision++) {
-                            const response = await request('/solve', { questions: [entry.question], images: [image], history });
+                            const response = await request('/solve', { questions: [entry.question], images, imageQuestionIds, history });
                             assertQuestion(); answer = XxtCodexCore.resolveAnswers([entry.question], response, { randomizeUncertain: true })[0];
                             if (!retryPlan.repeated([answer])) break;
                             history = XxtRetry.comparisonHistory(retryPlan.history, [answer], [], revision + 1);
@@ -1331,11 +1384,12 @@
         finally { remotePlayBusy = false; }
     }
     async function start({ recovery = false } = {}) {
-        if (!recovery) { recoverySerial++; recovering = false; inFlight?.abort(); videoLines?.reset(); }
+        if (!recovery) { retryQueue=null; recoverySerial++; recovering = false; inFlight?.abort(); XxtAi.cancelImageTest(); videoLines?.reset(); }
         if (isTop && coursePage()) sessionStorage.setItem(autoKey, '1');
         if (quietNow()) { suspendForQuiet(); resumeAfterQuiet = true; notify('已预约：夜间休息中，07:00 后自动开始（北京时间）'); return; }
         stopped = false; automatic = true; navigationRequested = false; documentReportedTask = ''; epoch++;
-        if (videoQuizRun !== null) inFlight?.abort();
+        if(coursePage()&&GM_getValue('xxt-prefetch',false)){const entries=catalogSnapshot(),index=entries.findIndex(x=>x.node.classList.contains('posCatalog_active'));void locator.prefetch(entries.slice(index+1,index+5),location.href);}
+        if (videoQuizRun !== null) inFlight?.abort(); XxtAi.cancelImageTest();
         dismissInterruptions();
         syncPlaybackRate();
         if (coursePage()) {
@@ -1378,6 +1432,7 @@
         if (window.app) { window.app.configs.autoplay = false; window.app._isPlaying = false; window.app._clearCheckInterval(); window.app._videoEl?.pause(); }
     }
     function stop() {
+        retryQueue=null;
         recoverySerial++; recovering = false;
         if (isTop && coursePage()) sessionStorage.removeItem(autoKey);
         resumeAfterQuiet = false;
@@ -1399,7 +1454,7 @@
                     if (action === 'start') await start();
                     if (action === 'solve') {
                         if (!aiEnabled()) { notify('不接入 AI 模式不提供答案；如需此功能，请先切换为接入 AI。'); return; }
-                        recoverySerial++; recovering = false; inFlight?.abort();
+                        recoverySerial++; recovering = false; inFlight?.abort(); XxtAi.cancelImageTest();
                         automatic = false; stopped = true; stopPlayer();
                         if (coursePage()) for (const [source, entry] of controlledFrames()) post(source, 'stop', { target: entry.nonce });
                         if (quietNow()) { notify('夜间休息中，07:00 后可调用 AI'); return; }
@@ -1419,11 +1474,21 @@
             actions.append(button);
         }
         const output = document.createElement('pre'); output.style.cssText = 'white-space:pre-wrap;word-break:break-word;font:inherit;margin:0';
-        const details = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = '查看发送给 AI 的题目截图'; details.append(summary);
+        const details = document.createElement('details');details.dataset.questionPreviews='true'; const summary = document.createElement('summary'); summary.textContent = '查看发送给 AI 的题目截图'; details.append(summary);
         const runLog = document.createElement('details'); runLog.dataset.skippedLog = 'true';
         const logTitle = document.createElement('summary'); logTitle.textContent = '跳过记录';
         const logNote = document.createElement('p'); logNote.textContent = '自动异常在 AI 模式下每章先测试 AI 并重新开始一次（短请求可能计费）；不接入 AI 时直接记录并继续。跳过不等于平台已完成。记录仅保存在当前浏览器，显示最近20项。';
         runLog.append(logTitle, logNote, document.createElement('ul'));
+        const retryButton=document.createElement('button');retryButton.type='button';retryButton.dataset.retryPending='true';retryButton.textContent='集中补做未完成章节';retryButton.hidden=!coursePage();
+        retryButton.onclick=async()=>{stop();if(!ledgerValid()){notify('无法确认当前账号或课程标识，请手动打开待复核章节。');return;}const chapters=XxtRunLedger.plan(GM_getValue(`xxt-skipped:${autoKey}`,[]),catalogSnapshot(),ledgerScope);
+            if(!chapters.length){notify('没有可安全补做的记录；旧记录、目录变化或提交结果未确认的章节需手动检查。');return;}
+            retryQueue={remaining:chapters,current:null};try{await nextRetryChapter(false);}catch(error){pause(error.message,false);retryQueue=null;}};
+        runLog.append(retryButton);
+        const preloadLabel=document.createElement('label'),preload=document.createElement('input');preload.type='checkbox';preload.checked=GM_getValue('xxt-prefetch',false);preload.dataset.prefetch='true';
+        preload.onchange=()=>{stop();GM_setValue('xxt-prefetch',preload.checked);};preloadLabel.append(preload,'同源章节预读（可选）');runLog.append(preloadLabel);
+        const exportLog = document.createElement('button'); exportLog.type='button';exportLog.dataset.exportDiagnostics='true';exportLog.textContent='导出脱敏诊断';
+        exportLog.onclick=()=>{const value=diagnostics.export(globalThis.XxtRelease?.version || '1.1.0');const url=URL.createObjectURL(new Blob([value],{type:'application/json'}));const link=document.createElement('a');link.href=url;link.download='learning-assistant-diagnostics.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+        const privacyNote=document.createElement('p');privacyNote.textContent='诊断仅含错误分类、发生时间和批次数量，不含密钥、题目、截图、课程地址或接口原始响应。导出后可自行检查并附到反馈中，不会自动上传。';runLog.append(exportLog,privacyNote);
         panel.append(actions, output, details);
         themeStatus = XxtAssistantTheme.decorate(panel, { title, actions, output, details, runLog, playbackRate: getPlaybackRate(), onRateChange: changePlaybackRate, muted: getMuted(), onMutedChange: changeMuted,
             onAiChange: () => { stop(); notify('AI 配置已更改，请测试后重新开始自动。'); }, onQuietChange: () => syncQuietHours().catch(error => pause(error.message)) });
@@ -1596,7 +1661,7 @@
             }
             if (data.type === 'grant-video-quiz') {
                 if (data.resume) {
-                    if (videoQuizRun !== null) { epoch++; inFlight?.abort(); }
+                    if (videoQuizRun !== null) { epoch++; inFlight?.abort(); XxtAi.cancelImageTest(); }
                     stopped = false;
                 }
                 if (!stopped) { setTask(data.task); parentManaged = true; quizAuthorized = true; automatic = true; }
@@ -1605,7 +1670,7 @@
                 resumeAfterQuiet = false;
                 closeDocument();
                 cancelConfirmation(); pendingConfirmations.clear();
-                automatic = false; stopped = true; epoch++; inFlight?.abort(); remoteVideo?.pause();
+                automatic = false; stopped = true; epoch++; inFlight?.abort(); XxtAi.cancelImageTest(); remoteVideo?.pause();
                 messageValue = '自动模式已停止。'; if (panel) panel.querySelector('pre').textContent = messageValue;
             }
         }
@@ -1659,5 +1724,5 @@
     // Stops/errors clear it; first visits and other courses never auto-submit.
     if (isTop && coursePage() && sessionStorage.getItem(autoKey) === '1') start().catch(error => pause(error.message));
     const timer = setInterval(() => { tick().catch(error => pause(error.message)); }, 700);
-    window.addEventListener('pagehide', () => { topicOwner?.cancel(); closeDocument(); cancelConfirmation(); pendingConfirmations.clear(); unloaded = true; stopped = true; epoch++; inFlight?.abort(); visibilityObserver?.disconnect(); clearInterval(timer); }, { once: true });
+    window.addEventListener('pagehide', () => { locator.close(); topicOwner?.cancel(); closeDocument(); cancelConfirmation(); pendingConfirmations.clear(); unloaded = true; stopped = true; epoch++; inFlight?.abort(); XxtAi.cancelImageTest(); visibilityObserver?.disconnect(); clearInterval(timer); }, { once: true });
 })();

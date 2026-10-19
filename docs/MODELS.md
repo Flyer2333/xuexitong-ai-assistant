@@ -1,12 +1,14 @@
 # 模型目录与推理设置
 
-目录核对日期：**2026-10-19**。面板先选择服务商，再从“模型”下拉框选择准确 ID；列表末尾有 **没有我要的模型，手动填写**。原有自定义 ID 会自动进入手动填写模式，不会被换成另一个模型。
+目录核对日期：**2026-10-20**。面板先选择服务商，再从“模型”下拉框选择准确 ID；列表末尾有 **没有我要的模型，手动填写**。原有自定义 ID 会自动进入手动填写模式，不会被换成另一个模型。
 
 本目录收录已核实、适合文本或图文问答的模型，不包含语音合成、图像生成、向量嵌入和专用工具模型，也不是每个账号的实时可用列表。模型权限、地域、套餐、预览版与下线时间仍以服务商控制台为准。切换选项不会联网或产生 API 费用；“测试 AI”和实际答题可能计费。
 
-1.0.15 再次检索 10 家服务商的官方模型目录、参数及可读的上下架公告。当前保留 **61 个快捷 ID**，本次未确认需要新增或移除的型号。自定义 ID、Key 和已保存模型不因目录核查被替换。
+1.1.0 重新检索十家服务商的模型目录、参数和可读的更新/下线公告。快捷列表现有 **63 个 ID**：新增火山 `deepseek-v4-1-flash-261017`、`deepseek-v4-1-flash-economy-261017` 和 `gemini-3.1-flash-lite`；移除已弃用且自动路由到 3.8 Flash 的 `gemini-3.7-flash` 快捷项。已有自定义 ID、Key 和模型配置均保留，不会自动换成其他模型。
 
-本轮 DeepSeek 更新汇总与 Kimi 强度页恢复可读；Flash-1017 仍使用 `deepseek-flash`，K3 仍为 low/high/max。小米旧目录入口无正文，改用可读的中文模型目录、更新和下线公告，并使用 Chat API 枚举交叉核对；火山完整目录和原深度思考入口仅返回页面框架，发布公告可读，既有参数适配沿用上一版有正文的核查结果，本轮未独立重新确认全部火山参数。其余目录与参数可读部分保持原设置，图像生成、语音、嵌入等模型不纳入快捷列表。未读取的完整范围和未实测付费 API 的部分不宣称全面验证。
+本轮火山目录及思考参数正文可读，重新确认了 261017 Flash / Economy 的原厂托管 ID 和强度映射。Gemini 的 generateContent 专用思考文档确认 4 Argon 支持 low/medium/high，脚本已适配；选择模型默认值时发送其要求的 medium。DeepSeek 中文参数页直接读取失败，使用可读的英文模型列表、更新汇总、思考说明及中文搜索结果交叉核查，Flash 仍通过 `deepseek-flash` 调用最新 1017 版。小米 2.5 系列 10 月 21 日下线，不放回快捷项；Kimi 目录已包含下线记录。硅基流动最新下线公告涉及 systemone 的 diffusiongemma，未纳入本脚本列表。
+
+核查面向本脚本收录的文本/图文对话模型，不含语音、生成图像、嵌入和专用工具接口。部分页面入口会跳转，服务商目录与参数页也可能不同步；未找到独立更新公告或完整地域目录的部分不推断新增 ID。没有逐个付费调用验证账号权限，不承诺快捷项对所有地区和套餐都可用。
 
 ## 各服务商目录与来源
 
@@ -14,8 +16,8 @@
 | --- | --- | --- |
 | OpenAI | GPT-6 Astra、6.1 Sol、6 Sol、6 Luna；使用 API ID，不使用 Codex 界面里的显示名称 | [模型目录](https://developers.openai.com/api/docs/models)、[GPT-6 参数](https://developers.openai.com/api/docs/guides/latest-model)、[GPT-6 Sol](https://developers.openai.com/api/docs/models/gpt-6-sol) |
 | Claude | Fable 5.1、Opus/Sonnet/Haiku 5.5 | [模型 ID](https://platform.claude.com/docs/en/models/overview)、[effort](https://platform.claude.com/docs/en/build-with-claude/effort) |
-| Gemini | Gemini 4 Argon（推理暂用默认值）、当前 Flash 与 Flash-Lite、仍列出的 Pro/Flash 预览版和 2.5 系列；旧账号限制见官方说明 | [模型目录](https://ai.google.dev/gemini-api/docs/models)、[思考参数](https://ai.google.dev/gemini-api/docs/thinking) |
-| DeepSeek | `deepseek-flash`、`deepseek-v4-pro`；Flash 为当前官方调用别名 | [首次调用](https://api-docs.deepseek.com/zh-cn/)、[请求参数](https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/) |
+| Gemini | Gemini 4 Argon（low/medium/high）、当前 Flash 与 Flash-Lite、仍列出的 Pro/Flash 预览版和 2.5 系列；旧账号限制见官方说明 | [模型目录](https://ai.google.dev/gemini-api/docs/models)、[思考参数](https://ai.google.dev/gemini-api/docs/generate-content/thinking)、[更新与弃用](https://ai.google.dev/gemini-api/docs/changelog) |
+| DeepSeek | `deepseek-flash`、`deepseek-v4-pro`；Flash 为当前官方调用别名 | [模型列表](https://api-docs.deepseek.com/api/list-models/)、[更新](https://api-docs.deepseek.com/updates/)、[请求参数](https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/) |
 | 小米 MiMo | V2.6 Pro、Flash、Pro UltraSpeed；即将下线的 2.5 系列不作为快捷选项 | [模型目录](https://mimo.mi.com/docs/zh-CN/quick-start/summary/model)、[Chat API](https://mimo.mi.com/docs/zh-CN/api/chat/openai-api)、[模型更新](https://mimo.mi.com/docs/zh-CN/updates/model)、[下线公告](https://mimo.mi.com/docs/zh-CN/updates/deprecate) |
 | Kimi | K3、K2.6、K2.7 Code 及高速版；不再列出已下线的 K2.5/moonshot-v1 | [模型目录](https://platform.kimi.com/docs/models)、[思考模式](https://platform.kimi.com/docs/guide/use-thinking-models)、[K3 强度](https://platform.kimi.com/docs/guide/use-reasoning-effort)、[官方故障排查](https://www.kimi.com/help/kimi-api/api-troubleshooting) |
 | 智谱 GLM | `glm-5.3`、`glm-5.3-flash`、`glm-5.3-flashx`；Flash/FlashX 原生支持图片，参数与 5.3 一致，不能关闭思考，需匹配 API 权限 | [国内目录](https://docs.bigmodel.cn/cn/guide/models)、[GLM-5.3 官方说明](https://docs.z.ai/guides/llm/glm-5.3) |
@@ -37,7 +39,7 @@ GPT-6 Sol 与 Luna 可选 none；Astra 与 6.1 Sol 不能关闭推理。依据�
 | --- | --- | --- |
 | OpenAI 当前 GPT-6 | low / medium / high / xhigh / max；6 Sol 与 Luna 另有 none | Responses 的 `reasoning.effort`，或 Chat 的 `reasoning_effort` |
 | Claude 当前目录模型 | low / medium / high / xhigh / max | 原生 Messages 的 `output_config.effort` |
-| Gemini 3.8 Flash | low / medium / high | `generationConfig.thinkingConfig.thinkingLevel` |
+| Gemini 4 Argon / 3.8 Flash | low / medium / high | `generationConfig.thinkingConfig.thinkingLevel` |
 | DeepSeek 当前目录模型 | none / low / high / max | `reasoning_effort`，none 表示关闭思考 |
 | 小米 V2.6 | 开启 / 关闭思考 | `thinking.type`，不发送 xhigh |
 | Kimi K3 | low / high / max | `reasoning_effort`，不能关闭思考 |

@@ -64,3 +64,10 @@ test('verified Doubao and Omni effort fields, aliases and hosted model boundarie
     assert(C.model('qwen','xiaomi/mimo-v2.6-pro-ultraspeed').vision);
     assert.throws(()=>build('qwen','xiaomi/mimo-v2.6-pro-ultraspeed','enabled'),/不支持/);
 });
+test('Argon default thinking and newly verified hosted Flash IDs use correct request fields',()=>{
+    const argon=build('gemini','gemini-4-argon','');assert.equal(argon.generationConfig.thinkingConfig.thinkingLevel,'medium');
+    assert.equal(build('gemini','gemini-4-argon','low').generationConfig.thinkingConfig.thinkingLevel,'low');
+    assert.throws(()=>build('gemini','gemini-4-argon','none'),/不支持/);
+    for(const id of ['deepseek-v4-1-flash-261017','deepseek-v4-1-flash-economy-261017'])assert.equal(build('doubao',id,'max').reasoning_effort,'max');
+    assert(C.model('gemini','gemini-3.1-flash-lite'));assert(!C.model('gemini','gemini-3.7-flash'));
+});

@@ -2,7 +2,7 @@
 (function (root) {
     const C = typeof module !== 'undefined' && module.exports ? require('./core.cjs') : XxtCodexCore;
     const choicesKey = value => [...(value || [])].sort().join('');
-    const batchKey = (questions, answers) => JSON.stringify(questions.map(q => [q.id, choicesKey(answers.find(a => a.id === q.id)?.choices)]));
+    const batchKey = (questions, answers) => JSON.stringify(questions.map(q => [q.id, ['blank','essay'].includes(q.type)?answers.find(a=>a.id===q.id)?.texts:choicesKey(answers.find(a => a.id === q.id)?.choices)]));
     const optionIdentity = option => JSON.stringify([option.text.replace(/\s+/g, ''), option.imageKey || '']);
     const sameQuestion = (a, b) => a.type === b.type && C.normalizeQuestionText(a.text) === C.normalizeQuestionText(b.text) && a.imageKey === b.imageKey &&
         JSON.stringify(a.options.map(optionIdentity).sort()) === JSON.stringify(b.options.map(optionIdentity).sort());
@@ -15,6 +15,10 @@
             if (candidates.length !== 1 || used.has(candidates[0].id)) return null;
             const old = candidates[0], answer = attempt.answers.find(a => a.id === old.id);
             if (!answer) return null;
+            if (['blank','essay'].includes(question.type)) {
+                if (question.slots!==old.slots || !Array.isArray(answer.texts) || answer.texts.length!==question.slots) return null;
+                used.add(old.id);answers.push({id:question.id,choices:[],texts:[...answer.texts]});continue;
+            }
             const unchangedOptions = JSON.stringify(old.options) === JSON.stringify(question.options);
             const validChoices = Array.isArray(answer.choices) && answer.choices.length && new Set(answer.choices).size === answer.choices.length &&
                 answer.choices.every(key => question.options.some(o => o.key === key)) && (question.type === 'multiple' || answer.choices.length === 1);
@@ -36,6 +40,12 @@
         return { forbidden, history, repeated: answers => forbidden.some(old => batchKey(questions, old) === batchKey(questions, answers)) };
     }
     function novel(questions, answers, forbidden = [], locked = []) {
+        // Text answers have no finite option space. Never synthesize a new string
+        // just to evade a previously failed answer vector.
+        if (questions.some(q=>['blank','essay'].includes(q.type))) {
+            if (forbidden.some(old=>batchKey(questions,old)===batchKey(questions,answers))) return {answers:[],changed:false,exhausted:true};
+            return {answers,changed:false,exhausted:false};
+        }
         const fixed = new Set(locked.map(a => a.id));
         const domains = questions.map(q => ({ q, radix: fixed.has(q.id) ? 1 : q.type === 'multiple' ? 2 ** q.options.length - 1 : q.options.length }));
         const encode = values => {

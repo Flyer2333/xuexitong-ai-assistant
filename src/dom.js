@@ -9,6 +9,8 @@
     const imageSource = img => img.getAttribute('data-original') || img.getAttribute('data-src') || img.currentSrc || img.getAttribute('src') || '';
     function imageKey(el) {
         const sources = [...(el?.querySelectorAll('img') || [])].map(img => [imageSource(img), img.getAttribute('src'), img.getAttribute('srcset')]);
+        for (const visual of el?.querySelectorAll('svg,math,.MathJax,.katex') || []) sources.push(['rendered',visual.outerHTML]);
+        for (const canvas of el?.querySelectorAll('canvas') || []) {try{sources.push(['canvas',canvas.toDataURL()]);}catch{sources.push(['unreadable-canvas',String(Date.now())]);}}
         if (!sources.length) return undefined;
         let a = 2166136261, b = 3339675911;
         for (const char of JSON.stringify(sources)) { a = Math.imul(a ^ char.charCodeAt(0), 16777619); b = Math.imul(b ^ char.charCodeAt(0), 2246822519); }
@@ -28,12 +30,17 @@
     function extract(doc) {
         return [...doc.querySelectorAll('.TiMu')].filter(el => !el.parentElement?.closest('.TiMu')).map((el, index) => {
             const kind = text(el.querySelector('.newZy_TItle'));
-            const type = kind.includes('多选题') ? 'multiple' : kind.includes('判断题') ? 'boolean' : kind.includes('单选题') ? 'single' : 'unsupported';
+            let type = kind.includes('多选题') ? 'multiple' : kind.includes('判断题') ? 'boolean' : kind.includes('单选题') ? 'single' : kind.includes('填空题') ? 'blank' : /简答题|论述题/.test(kind) ? 'essay' : 'unsupported';
+            const fields = [...el.querySelectorAll('textarea,input[type="text"],input:not([type])')].filter(enabled);
+            const isText = ['blank','essay'].includes(type);
+            if (isText && (!fields.length || fields.length>20 || (type==='essay'&&fields.length!==1) || el.querySelector('[contenteditable="true"],iframe'))) type='unsupported';
             const rows = [...el.querySelectorAll('.Zy_ulTop > li')];
             const choiceClass = el.querySelector('[class*="choice"]')?.className.match(/\bchoice(\d+)\b/);
-            return { element: el, rows, question: {
+            return { element: el, rows, fields, question: {
                 id: choiceClass ? `q${choiceClass[1]}` : `q${index + 1}`,
-                type, text: text(el.querySelector('.Zy_TItle')), obfuscated: !!el.querySelector('.font-cxsecret'),
+                type, text: text(el.querySelector('.Zy_TItle')), obfuscated: !!(el.closest('.font-cxsecret') || el.querySelector('.font-cxsecret')),
+                requiresVision: [el.querySelector('.Zy_TItle'),...rows.map(row=>row.querySelector('.after')||row)].some(region=>!!region?.querySelector('canvas,svg,math,iframe,.MathJax,.katex')),
+                ...(isText ? {slots:fields.length} : {}),
                 ...(imageKey(el.querySelector('.Zy_TItle')) ? { imageKey: imageKey(el.querySelector('.Zy_TItle')) } : {}),
                 options: rows.map(row => {
                     const content = row.querySelector('.after'), visual = imageKey(content || row);
@@ -143,9 +150,32 @@
             row.classList.contains('check_answer') || row.classList.contains('check_answer_dx');
     }
     async function applyAnswers(entries, answers, assertCurrent = () => {}) {
+        // Preflight the whole form before any write; protect input present at parse time
+        // and edits made while the model request was in flight.
+        for (const entry of entries) if (entry.fields?.length) {
+            const answer=answers.find(a=>a.id===entry.question.id);
+            if (!answer?.texts || entry.fields.length!==answer.texts.length) throw new Error('文本答案与输入框不一致');
+            for (const field of entry.fields) if (field.value && field.value !== ownedText.get(field)) throw new Error('检测到已有或手动输入，保留内容并取消自动提交');
+        }
+        for (const entry of entries) if (entry.rows.length) {
+            const current=entry.rows.map((row,i)=>selected(row)?entry.question.options[i].key:'').join('');
+            const defaults=entry.rows.every(row=>{const input=row.querySelector('input[type="radio"],input[type="checkbox"]');return input&&input.checked===input.defaultChecked;});
+            if (manualChoices.has(entry.element) || (current && current!==ownedChoices.get(entry.element)&&!defaults)) throw new Error('检测到已有或手动选择，保留选择并取消自动提交');
+        }
         for (const entry of entries) {
             const answer = answers.find(item => item.id === entry.question.id);
             if (!answer) throw new Error('答案与题目不一致');
+            if (['blank','essay'].includes(entry.question.type)) {
+                for (let i=0;i<entry.fields.length;i++) {
+                    assertCurrent();const field=entry.fields[i];
+                    if (!enabled(field) || field.readOnly || (field.value && field.value !== ownedText.get(field))) throw new Error('输入框已变化或包含手动输入，取消提交');
+                    const prototype=field.tagName==='TEXTAREA'?field.ownerDocument.defaultView.HTMLTextAreaElement.prototype:field.ownerDocument.defaultView.HTMLInputElement.prototype;
+                    Object.getOwnPropertyDescriptor(prototype,'value').set.call(field,answer.texts[i]);ownedText.set(field,answer.texts[i]);
+                    field.dispatchEvent(new Event('input',{bubbles:true}));field.dispatchEvent(new Event('change',{bubbles:true}));
+                    assertCurrent();if(field.value!==answer.texts[i])throw new Error('文本答案未正确写入，取消提交');
+                }
+                continue;
+            }
             for (let index = 0; index < entry.rows.length; index++) {
                 assertCurrent();
                 const row = entry.rows[index];
@@ -159,8 +189,13 @@
             assertCurrent();
             const actual = entry.rows.flatMap((row, index) => selected(row) ? [entry.question.options[index].key] : []).sort();
             if (actual.join(',') !== [...answer.choices].sort().join(',')) throw new Error(`题目 ${entry.question.id} 未正确选中，取消提交`);
+            ownedChoices.set(entry.element,entry.rows.map((row,i)=>selected(row)?entry.question.options[i].key:'').join(''));
         }
     }
+    const ownedText = new WeakMap();
+    const ownedChoices = new WeakMap();
+    const manualChoices = new WeakSet();
+    for(const type of ['click','keydown'])document.addEventListener(type,event=>{if(event.isTrusted){const question=event.target.closest?.('.TiMu');if(question)manualChoices.add(question);}},true);
     function navigationPrompt(doc) {
         const label = el => text(el).replace(/[\s\u200b-\u200d\ufeff]/g, '');
         const prompts = [...doc.querySelectorAll('p,div,span,label')].filter(el => visible(el) &&

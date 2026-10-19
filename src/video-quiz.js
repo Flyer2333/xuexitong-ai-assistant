@@ -49,14 +49,17 @@
         if (controls.length < 2 || controls.length > 20) return null;
         const title = panel.querySelector('.tkItem_title,.ans-videoquiz-tit,.ans-videoquiz-title,.videoquiz-title,[data-question-title]') ||
             [...panel.querySelectorAll('p,h2,h3,h4')].find(el => !el.querySelector(inputs) && D.visible(el) && D.text(el).length > 8 && !/^(正确答案|回答正确|回答错误)/.test(D.text(el)));
-        if (!title || !D.text(title)) return null;
+        if (!title || (!D.text(title) && !D.imageKey(title))) return null;
         const rows = controls.map(control => control.closest('label') || control.labels?.[0] || control.closest('li,p,.ans-videoquiz-opt') || control.parentElement);
         const options = rows.map((row, index) => ({ key: String.fromCharCode(65 + index),
-            text: D.text(row).replace(/^[A-T]\s*[、.．:：]\s*/, '').trim() }));
+            text: D.text(row).replace(/^[A-T]\s*[、.．:：]\s*/, '').trim() || (D.imageKey(row) ? '（图片选项，请根据截图判断）' : ''),
+            ...(D.imageKey(row) ? {imageKey:D.imageKey(row)} : {}) }));
         if (options.some(option => !option.text)) return null;
         const kind = D.text(panel.querySelector('.tkTopic_title,.ans-videoquiz-type,[data-question-type]')) || D.text(panel);
         const type = controls.some(control => control.type === 'checkbox' || control.getAttribute('role') === 'checkbox') ? 'multiple' : /判断题/.test(kind) ? 'boolean' : 'single';
-        const question = { id: `vq${hash(D.text(title) + JSON.stringify(options))}`, type, text: D.text(title), options, obfuscated: !!panel.querySelector('.font-cxsecret') };
+        const question = { id: `vq${hash(D.text(title) + JSON.stringify(options))}`, type, text: D.text(title), options, obfuscated: !!(panel.closest('.font-cxsecret') || panel.querySelector('.font-cxsecret')),
+            requiresVision: [title,...rows].some(region=>!!region.querySelector('canvas,svg,math,iframe,.MathJax,.katex')),
+            ...(D.imageKey(title) ? {imageKey:D.imageKey(title)} : {}) };
         return { panel, controls, rows, question, signature: JSON.stringify(question) };
     }
     function control(panel, pattern) {
@@ -67,7 +70,13 @@
     const selected = el => el.matches('input') ? el.checked : el.getAttribute('aria-checked') === 'true';
     const selection = entry => entry.controls.flatMap((el, index) => selected(el) ? [entry.question.options[index].key] : []);
     const submitting = panel => [...panel.querySelectorAll('#videoquiz-submitting')].some(D.visible);
+    const ownedSelections=new WeakMap();
+    const manualSelections=new WeakSet();
+    for(const type of ['click','keydown'])document.addEventListener(type,event=>{if(event.isTrusted){const target=event.target.closest?.(inputs)||event.target.closest?.('label')?.querySelector(inputs);if(target)manualSelections.add(target);}},true);
     async function apply(entry, answer, guard) {
+        const prior=selection(entry).sort().join('');
+        const untouchedDefault=entry.controls.every(el=>el.matches('input')&&el.checked===el.defaultChecked);
+        if(entry.controls.some(el=>manualSelections.has(el)) || (prior && prior!==ownedSelections.get(entry.panel)&&!untouchedDefault))throw new Error('视频弹题存在手动选择，保留选择并取消自动提交');
         for (let index = 0; index < entry.controls.length; index++) {
             guard(); const el = entry.controls[index], want = answer.choices.includes(entry.question.options[index].key);
             if (selected(el) !== want && (entry.question.type === 'multiple' || want)) {
@@ -80,6 +89,7 @@
         guard();
         const actual = selection(entry);
         if (actual.sort().join('') !== [...answer.choices].sort().join('')) throw new Error('视频弹题选项未正确选中，已停止提交');
+        ownedSelections.set(entry.panel,actual.sort().join(''));
     }
     function feedback(panel, question) {
         const nodes = [...panel.querySelectorAll(feedbackSelector + ',p')]

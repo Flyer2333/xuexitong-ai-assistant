@@ -36,7 +36,11 @@
 [data-xxt-codex-panel] [data-xxt-updates] ul,[data-xxt-codex-panel] [data-xxt-updates] ol{padding-left:18px;margin:8px 0;font-size:12px}
 [data-xxt-codex-panel] [data-xxt-updates] li+li{margin-top:6px}
 [data-xxt-codex-panel] .xxt-update-dismiss{justify-self:start;border:1px solid var(--line);border-radius:8px;padding:6px 12px;background:#fff;color:var(--accent)}
-[data-xxt-codex-panel] .ai-buttons{display:flex;gap:8px}
+[data-xxt-codex-panel] .ai-buttons{display:flex;flex-wrap:wrap;gap:8px}
+[data-xxt-codex-panel] .xxt-route-control{display:block;margin-top:10px;font-size:12px;color:var(--ink)}
+[data-xxt-codex-panel] .xxt-route-note{font-size:11px;line-height:1.7;color:var(--muted);margin:6px 0}
+[data-xxt-codex-panel] [hidden]{display:none!important}
+[data-xxt-codex-panel] [data-skipped-log] button{border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin:4px 6px 4px 0;background:#fff;color:var(--accent)}
 [data-xxt-codex-panel] .ai-buttons button{border:1px solid #c7d2fe;background:var(--tint);color:#4338ca;border-radius:8px;padding:8px 12px}
 [data-xxt-codex-panel] .xxt-feedback{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;color:var(--muted);font-size:11px;line-height:1.7}
 [data-xxt-codex-panel] .xxt-feedback-links{display:flex;gap:14px;margin-bottom:4px}
@@ -67,21 +71,22 @@
 [data-xxt-codex-panel] [data-skipped-log] li+li{margin-top:6px}
 [data-xxt-codex-panel] [hidden]{display:none!important}
 `;
-    function aiSettings(onChange) {
-        const A = XxtAi, section = document.createElement('details'); section.dataset.aiSettings = 'true';
-        const heading = document.createElement('summary'); heading.textContent = 'AI 接口设置';
+    function aiSettings(onChange, storageKey = 'xxt-ai-config') {
+        const visionSlot = storageKey !== 'xxt-ai-config';
+        const A = XxtAi, section = document.createElement('details'); section.dataset[visionSlot ? 'visionSettings' : 'aiSettings'] = 'true';
+        const heading = document.createElement('summary'); heading.textContent = visionSlot ? '图片题专用视觉模型（可选）' : 'AI 接口设置';
         const form = document.createElement('div'); form.className = 'ai-form';
         const fields = {};
         function field(key, label, options) {
             const wrapper = document.createElement('label'); wrapper.textContent = label;
-            const input = document.createElement(options ? 'select' : 'input'); input.dataset.aiField = key;
+            const input = document.createElement(options ? 'select' : 'input'); input.dataset[visionSlot ? 'visionField' : 'aiField'] = key;
             if (options) for (const [value, text] of options) { const option = document.createElement('option'); option.value = value; option.textContent = text; input.append(option); }
             wrapper.append(input); form.append(wrapper); fields[key] = input; return input;
         }
         field('provider','服务商',Object.entries(A.presets).map(([key,value]) => [key,value.label]));
         field('protocol','接口协议',[['chat','OpenAI Chat Completions'],['responses','OpenAI Responses'],['anthropic','Claude Messages'],['gemini','Gemini generateContent'],['codex','本地 Codex']]);
         field('baseUrl','Base URL（不带具体接口路径）');
-        const modelPicker = document.createElement('select'); modelPicker.dataset.aiModelPicker = 'true';
+        const modelPicker = document.createElement('select'); modelPicker.dataset[visionSlot ? 'visionModelPicker' : 'aiModelPicker'] = 'true';
         const modelLabel = document.createElement('label'); modelLabel.textContent = '模型'; modelLabel.append(modelPicker); form.append(modelLabel);
         field('model','手动填写模型 ID'); fields.model.autocomplete = 'off'; fields.model.spellcheck = false;
         const catalogNote = document.createElement('small'); catalogNote.dataset.aiCatalogNote = 'true'; form.append(catalogNote);
@@ -121,23 +126,28 @@
         const note = document.createElement('small'); note.textContent = 'API 按服务商用量计费。“测试 AI”会发送一条短请求。Key 保存在油猴存储，非加密保险箱；仅向你配置的 API 发送题目与截图。更换服务商或地址后必须重新输入 Key。';
         const message = document.createElement('small'); message.setAttribute('role','status');
         function populate() {
-            const c = A.load();
+            const c = A.load(storageKey);
             for (const [key,input] of Object.entries(fields)) { if (key === 'key') { input.value = ''; input.placeholder = c.key ? '已保存，留空保留（同一地址）' : '请输入你自己的密钥'; } else if (input.type === 'checkbox') input.checked = !!c[key]; else input.value = String(c[key] ?? ''); }
             updateModelPicker(c.model); updateReasoning(c.reasoning);
         }
         fields.provider.onchange = () => { const preset = A.presets[fields.provider.value]; fields.protocol.value = preset.protocol; fields.baseUrl.value = preset.baseUrl; fields.vision.checked = preset.vision; fields.key.value = ''; fields.key.placeholder = '请输入该服务商的密钥'; updateModelPicker(); updateReasoning(''); };
         const controls = document.createElement('div'); controls.className = 'ai-buttons';
-        const save = document.createElement('button'); save.type = 'button'; save.textContent = '保存设置'; save.dataset.aiSave = 'true';
+        const save = document.createElement('button'); save.type = 'button'; save.textContent = '保存设置'; save.dataset[visionSlot ? 'visionSave' : 'aiSave'] = 'true';
         save.onclick = () => {
             try {
                 const c = Object.fromEntries(Object.entries(fields).map(([key,input]) => [key,input.type === 'checkbox' ? input.checked : input.value]));
-                const old = A.load();
+                const old = A.load(storageKey);
                 if (!c.key && c.provider === old.provider && c.protocol === old.protocol && c.baseUrl.replace(/\/+$/,'') === old.baseUrl) c.key = old.key;
-                const valid = A.normalize(c); onChange(); GM_setValue('xxt-ai-config', valid); populate(); message.textContent = '已保存。点击“测试 AI”验证（会消耗少量 API 用量）。';
+                const valid = A.normalize(c); onChange(); GM_setValue(storageKey, valid); populate(); message.textContent = '已保存。点击“测试 AI”验证（会消耗少量 API 用量）。';
             } catch (error) { message.textContent = error.message; }
         };
         const clear = document.createElement('button'); clear.type = 'button'; clear.textContent = '清除密钥';
-        clear.onclick = () => { onChange(); GM_setValue('xxt-ai-config',{ ...A.load(),key:'' }); populate(); message.textContent = '已清除当前密钥。'; };
+        clear.onclick = () => { onChange(); GM_setValue(storageKey,{ ...A.load(storageKey),key:'' }); populate(); message.textContent = '已清除当前密钥。'; };
+        const imageTest=document.createElement('button');imageTest.type='button';imageTest.textContent='测试图片识别（可能计费）';
+        imageTest.onclick=async()=>{onChange();if(GM_getValue('xxt-quiet-enabled',true)&&globalThis.XxtCodexCore.quietHoursAt()){message.textContent='夜间休息中，07:00 后可测试图片识别';return;}const job=A.testImages(A.load(storageKey));imageTest.disabled=true;message.textContent='正在测试随机数字图片…';try{message.textContent=(await job.promise).message;}catch(error){message.textContent=error.message;}finally{imageTest.disabled=false;}};
+        form.addEventListener('input',()=>A.cancelImageTest());
+        form.addEventListener('change',()=>A.cancelImageTest());
+        controls.append(imageTest);
         controls.append(save,clear); form.append(note,controls,message); section.append(heading,form); populate(); return section;
     }
     function decorate(panel, { title, actions, output, details, runLog, onQuietChange, playbackRate, onRateChange, onAiChange, muted, onMutedChange }) {
@@ -175,10 +185,17 @@
         }
         mode.value = GM_getValue('xxt-ai-enabled', !!GM_getValue('xxt-ai-config', {})?.key) ? 'on' : 'off';
         const modeNote = document.createElement('p'); modeNote.className = 'xxt-foreground-note';
-        const aiForm = aiSettings(onAiChange);
+        const aiForm = aiSettings(onAiChange), visionForm = aiSettings(onAiChange,'xxt-ai-vision-config');
+        const routingLabel=document.createElement('label'),routing=document.createElement('input');routing.type='checkbox';routing.checked=GM_getValue('xxt-ai-routing',true);routing.dataset.setting='ai-routing';routingLabel.append(routing,document.createTextNode('自动分流：文字题只发文字，图片题才发截图'));
+        routing.onchange=()=>{onAiChange();GM_setValue('xxt-ai-routing',routing.checked);};
+        const visionLabel=document.createElement('label'),visionEnabled=document.createElement('input');visionEnabled.type='checkbox';visionEnabled.checked=GM_getValue('xxt-ai-vision-enabled',false);visionEnabled.dataset.setting='vision-enabled';visionLabel.append(visionEnabled,document.createTextNode('图片题使用单独的视觉模型'));
+        visionEnabled.onchange=()=>{onAiChange();GM_setValue('xxt-ai-vision-enabled',visionEnabled.checked);updateMode();};
+        const routingNote=document.createElement('p');routingNote.textContent='默认模型处理文字题；未启用独立视觉模型时，图片题仍使用默认模型，须支持图片并开启截图。特殊字体和公式按图片处理。';
+        routingLabel.className=visionLabel.className='xxt-route-control';routingNote.className='xxt-route-note';
         const updateMode = () => {
             const enabled = mode.value === 'on';
-            status.textContent = enabled ? '学习流程 · 多模型接入' : '学习流程 · 不接入 AI'; aiForm.hidden = !enabled;
+            status.textContent = enabled ? '学习流程 · 多模型接入' : '学习流程 · 不接入 AI';
+            visionForm.hidden=!enabled||!visionEnabled.checked; routingLabel.hidden=visionLabel.hidden=routingNote.hidden=!enabled; aiForm.hidden = !enabled;
             for (const action of ['connect','solve']) actions.querySelector(`[data-action="${action}"]`).disabled = !enabled;
             modeNote.textContent = enabled ? '使用自己的模型接口作答，测试与答题可能产生 API 费用。' : '无需 Key，直接开始。处理视频、文献和专题；题目记录后跳过，视频弹题可能导致当前视频未完成。';
         };
@@ -208,7 +225,7 @@
         const authorNote = document.createElement('div'); authorNote.textContent = '脚本根据作者自己的实际使用需求编写，并持续完善。遇到暂不支持的场景，或有希望增加的功能，欢迎及时反馈；作者会第一时间跟进，评估后补充相应设置和功能。';
         feedbackCopy.append(authorNote,feedbackNote,privacyNote); feedbackDetails.append(feedbackSummary,feedbackCopy);
         feedback.append(feedbackLinks,feedbackDetails);
-        actions.className = 'xxt-actions'; body.append(actions,status,output,foregroundNote,modeLabel,modeNote,aiForm,settings,details,...(runLog ? [runLog] : []),XxtUpdates.create(),feedback); header.append(name,fold); shell.append(header,picker,body); panel.replaceChildren(shell,mascot);
+        actions.className = 'xxt-actions'; body.append(actions,status,output,foregroundNote,modeLabel,modeNote,routingLabel,routingNote,aiForm,visionLabel,visionForm,settings,details,...(runLog ? [runLog] : []),XxtUpdates.create(),feedback); header.append(name,fold); shell.append(header,picker,body); panel.replaceChildren(shell,mascot);
         applySkin(GM_getValue('xxt-ui-skin','default'));
         let drag;
         header.onpointerdown = event => { if (event.button !== 0 || event.target.closest('button')) return; const r = panel.getBoundingClientRect(); drag = {x:event.clientX-r.left,y:event.clientY-r.top}; header.setPointerCapture(event.pointerId); event.preventDefault(); };

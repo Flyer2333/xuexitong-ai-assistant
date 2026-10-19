@@ -4,9 +4,9 @@
 
 本目录收录已核实、适合文本或图文问答的模型，不包含语音合成、图像生成、向量嵌入和专用工具模型，也不是每个账号的实时可用列表。模型权限、地域、套餐、预览版与下线时间仍以服务商控制台为准。切换选项不会联网或产生 API 费用；“测试 AI”和实际答题可能计费。
 
-1.0.14 重新读取现有 10 家服务商的目录、推理参数及可读的上下架公告，并补读 Omni、火山发布公告和 Kimi 官方帮助页。当前共 **61 个快捷 ID**：新增百炼 `xiaomi/mimo-v2.6-pro-ultraspeed`，以及火山 `deepseek-v4-1-flash-260910`、`glm-5-3-flash-260828`。托管 ID 按各平台官方记录收录，不从原厂名称推导；是否可用仍需匹配地域、业务空间和账号权限。
+1.0.15 再次检索 10 家服务商的官方模型目录、参数及可读的上下架公告。当前保留 **61 个快捷 ID**，本次未确认需要新增或移除的型号。自定义 ID、Key 和已保存模型不因目录核查被替换。
 
-本次豆包深度思考和发布公告恢复可读，已补充 Seed 的强度选项；千问 Omni 的具体参数页已明确强度取值及映射。小米模型目录仍无正文，但 Chat API 型号枚举可读；豆包完整目录仍只有页面框架，DeepSeek 更新汇总读取失败，Kimi 强度页再次读取失败，后者改用官方帮助页交叉核对。不可读部分不声称全面复核；未逐一调用付费 API 验证。原有 58 个 ID 保留，模型和密钥不会因更新被覆盖。
+本轮 DeepSeek 更新汇总与 Kimi 强度页恢复可读；Flash-1017 仍使用 `deepseek-flash`，K3 仍为 low/high/max。小米旧目录入口无正文，改用可读的中文模型目录、更新和下线公告，并使用 Chat API 枚举交叉核对；火山完整目录和原深度思考入口仅返回页面框架，发布公告可读，既有参数适配沿用上一版有正文的核查结果，本轮未独立重新确认全部火山参数。其余目录与参数可读部分保持原设置，图像生成、语音、嵌入等模型不纳入快捷列表。未读取的完整范围和未实测付费 API 的部分不宣称全面验证。
 
 ## 各服务商目录与来源
 
@@ -16,7 +16,7 @@
 | Claude | Fable 5.1、Opus/Sonnet/Haiku 5.5 | [模型 ID](https://platform.claude.com/docs/en/models/overview)、[effort](https://platform.claude.com/docs/en/build-with-claude/effort) |
 | Gemini | Gemini 4 Argon（推理暂用默认值）、当前 Flash 与 Flash-Lite、仍列出的 Pro/Flash 预览版和 2.5 系列；旧账号限制见官方说明 | [模型目录](https://ai.google.dev/gemini-api/docs/models)、[思考参数](https://ai.google.dev/gemini-api/docs/thinking) |
 | DeepSeek | `deepseek-flash`、`deepseek-v4-pro`；Flash 为当前官方调用别名 | [首次调用](https://api-docs.deepseek.com/zh-cn/)、[请求参数](https://api-docs.deepseek.com/zh-cn/api/create-chat-completion/) |
-| 小米 MiMo | V2.6 Pro、Flash、Pro UltraSpeed；即将下线的 2.5 系列不作为快捷选项 | [模型目录](https://mimo.mi.com/docs/en-US/quick-start/model)、[Chat API](https://mimo.mi.com/docs/zh-CN/api/chat/openai-api) |
+| 小米 MiMo | V2.6 Pro、Flash、Pro UltraSpeed；即将下线的 2.5 系列不作为快捷选项 | [模型目录](https://mimo.mi.com/docs/zh-CN/quick-start/summary/model)、[Chat API](https://mimo.mi.com/docs/zh-CN/api/chat/openai-api)、[模型更新](https://mimo.mi.com/docs/zh-CN/updates/model)、[下线公告](https://mimo.mi.com/docs/zh-CN/updates/deprecate) |
 | Kimi | K3、K2.6、K2.7 Code 及高速版；不再列出已下线的 K2.5/moonshot-v1 | [模型目录](https://platform.kimi.com/docs/models)、[思考模式](https://platform.kimi.com/docs/guide/use-thinking-models)、[K3 强度](https://platform.kimi.com/docs/guide/use-reasoning-effort)、[官方故障排查](https://www.kimi.com/help/kimi-api/api-troubleshooting) |
 | 智谱 GLM | `glm-5.3`、`glm-5.3-flash`、`glm-5.3-flashx`；Flash/FlashX 原生支持图片，参数与 5.3 一致，不能关闭思考，需匹配 API 权限 | [国内目录](https://docs.bigmodel.cn/cn/guide/models)、[GLM-5.3 官方说明](https://docs.z.ai/guides/llm/glm-5.3) |
 | 千问 / 百炼 | 已核实的 3.8/3.7/3.6/3.5 系列和 VL，新增 27B、2.4T-A95B、Omni Flash；托管第三方模型可手填 | [模型大全](https://help.aliyun.com/zh/model-studio/models)、[模型范围](https://help.aliyun.com/zh/model-studio/batch-inference)、[深度思考](https://help.aliyun.com/zh/model-studio/deep-thinking/)、[文本生成](https://help.aliyun.com/zh/model-studio/text-generation)、[上下架公告](https://help.aliyun.com/zh/model-studio/newly-released-models)、[Omni 参数](https://help.aliyun.com/zh/model-studio/qwen-omni) |

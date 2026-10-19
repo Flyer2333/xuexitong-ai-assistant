@@ -1,6 +1,7 @@
 (() => {
     'use strict';
     const css = `
+[data-xxt-codex-panel] button:disabled{opacity:.45;cursor:not-allowed}
 [data-xxt-codex-panel]{--ink:#1e293b;--accent:#4f46e5;--line:#e2e8f0;--surface:#f8fafc;--tint:#eef2ff;--muted:#64748b;--button:#4f46e5;--button-ink:#fff;color:var(--ink)!important;font:13px/1.6 system-ui,'Microsoft YaHei',sans-serif!important;color-scheme:light}
 [data-xxt-codex-panel] *{box-sizing:border-box}
 [data-xxt-codex-panel] .xxt-shell{border:1px solid var(--line);border-radius:18px;background:var(--surface);box-shadow:0 16px 50px #17255424;overflow:hidden}
@@ -167,6 +168,22 @@
         const status = make('div','xxt-state'); status.textContent = '学习流程 · 多模型接入';
         const foregroundNote = make('p','xxt-foreground-note');
         foregroundNote.textContent = '建议将课程页保持在前台：选中课程标签，不最小化窗口，也不要让电脑休眠。后台运行可能使弹题处理或“继续学习”延迟。';
+        const modeLabel = document.createElement('label'), mode = document.createElement('select');
+        mode.dataset.setting = 'ai-mode'; mode.setAttribute('aria-label', '运行模式');
+        for (const [value,label] of [['off','不接入 AI'],['on','接入 AI（自动答题）']]) {
+            const option = document.createElement('option'); option.value = value; option.textContent = label; mode.append(option);
+        }
+        mode.value = GM_getValue('xxt-ai-enabled', !!GM_getValue('xxt-ai-config', {})?.key) ? 'on' : 'off';
+        const modeNote = document.createElement('p'); modeNote.className = 'xxt-foreground-note';
+        const aiForm = aiSettings(onAiChange);
+        const updateMode = () => {
+            const enabled = mode.value === 'on';
+            status.textContent = enabled ? '学习流程 · 多模型接入' : '学习流程 · 不接入 AI'; aiForm.hidden = !enabled;
+            for (const action of ['connect','solve']) actions.querySelector(`[data-action="${action}"]`).disabled = !enabled;
+            modeNote.textContent = enabled ? '使用自己的模型接口作答，测试与答题可能产生 API 费用。' : '无需 Key，直接开始。处理视频、文献和专题；题目记录后跳过，视频弹题可能导致当前视频未完成。';
+        };
+        mode.onchange = () => { onAiChange(); GM_setValue('xxt-ai-enabled', mode.value === 'on'); updateMode(); output.textContent = '运行模式已保存，点击“开始自动”继续。'; };
+        modeLabel.append(document.createTextNode('运行模式 '),mode); updateMode();
         const settings = make('div','xxt-settings'), rateLabel = make('label','xxt-rate-setting'), rate = document.createElement('select'); rate.dataset.setting = 'playback-rate'; rate.setAttribute('aria-label','视频倍速');
         for (const value of XxtCodexCore.playbackRates) { const option = document.createElement('option'); option.value = value; option.textContent = value === 1 ? '1×（建议）' : `${value}×`; rate.append(option); }
         rate.value = playbackRate; rate.onchange = () => onRateChange(Number(rate.value)); rateLabel.append(document.createTextNode('视频倍速'),rate);
@@ -191,7 +208,7 @@
         const authorNote = document.createElement('div'); authorNote.textContent = '脚本根据作者自己的实际使用需求编写，并持续完善。遇到暂不支持的场景，或有希望增加的功能，欢迎及时反馈；作者会第一时间跟进，评估后补充相应设置和功能。';
         feedbackCopy.append(authorNote,feedbackNote,privacyNote); feedbackDetails.append(feedbackSummary,feedbackCopy);
         feedback.append(feedbackLinks,feedbackDetails);
-        actions.className = 'xxt-actions'; body.append(actions,status,output,foregroundNote,aiSettings(onAiChange),settings,details,...(runLog ? [runLog] : []),XxtUpdates.create(),feedback); header.append(name,fold); shell.append(header,picker,body); panel.replaceChildren(shell,mascot);
+        actions.className = 'xxt-actions'; body.append(actions,status,output,foregroundNote,modeLabel,modeNote,aiForm,settings,details,...(runLog ? [runLog] : []),XxtUpdates.create(),feedback); header.append(name,fold); shell.append(header,picker,body); panel.replaceChildren(shell,mascot);
         applySkin(GM_getValue('xxt-ui-skin','default'));
         let drag;
         header.onpointerdown = event => { if (event.button !== 0 || event.target.closest('button')) return; const r = panel.getBoundingClientRect(); drag = {x:event.clientX-r.left,y:event.clientY-r.top}; header.setPointerCapture(event.pointerId); event.preventDefault(); };

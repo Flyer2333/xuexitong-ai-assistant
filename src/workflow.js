@@ -19,7 +19,8 @@
     const courseParams = new URLSearchParams(location.search);
     const autoKey = `xxt-auto:${location.origin}/${courseParams.get('courseId') || courseParams.get('courseid') || ''}/${courseParams.get('clazzid') || courseParams.get('clazzId') || ''}`;
     let panel, themeStatus, automatic = false, busy = false, stopped = false, task = '', record = {}, inFlight;
-    let messageValue = '展开“AI 接口设置”填写服务商、模型和 Key，再测试 AI。';
+    const aiEnabled = () => GM_getValue('xxt-ai-enabled', !!GM_getValue('xxt-ai-config', {})?.key);
+    let messageValue = '选择“不接入 AI”可直接开始；需要自动答题时再接入 AI。';
     let epoch = 0, frameClaimAt = 0, frameClaimTask = '', grantAt = 0, unloaded = false, parentManaged = false, navigationContent = null;
     let coordinator = null, coordinatorDistance = Infinity, expectedCheckTask = '', expectedVideoTask = '', navigationRequested = false;
     let expectedDocumentTask = '', documentReportedTask = '', openedDocument = null, documentOwner = null, grantedDocumentIds = null;
@@ -69,11 +70,12 @@
     visibilityObserver?.observe(document.documentElement);
     const frames = new Map();
     const quizFrames = new Map();
+    const skippedQuizWindows = new Set();
     const retiredQuizForms = new Set();
     const quizDocumentViews = new WeakMap();
     let quizAuthorized = false, videoQuizRun = null;
     const controlledFrames = () => new Map([...frames, ...quizFrames]);
-    const hasVideoQuiz = () => Q.across(pageWindow).length > 0 || (coursePage() && [...quizFrames.values()].some(entry => entry.task === courseTask() && Date.now() - entry.at < 4000));
+    const hasVideoQuiz = () => Q.across(pageWindow).some(hit => !skippedQuizWindows.has(hit.win)) || (coursePage() && [...quizFrames.values()].some(entry => entry.task === courseTask() && Date.now() - entry.at < 4000));
     const pendingConfirmations = new Map();
     let submitRequest = null;
     const completedSenders = new Set();
@@ -105,7 +107,7 @@
     function notify(value) {
         messageValue = value;
         if (panel) panel.querySelector('pre').textContent = value;
-        if (themeStatus) { const sleep = /夜间休息|已预约/.test(value); themeStatus.textContent = sleep ? '夜间休息 · 北京时间' : '学习流程 · 多模型接入'; panel.dataset.sleeping = String(sleep); }
+        if (themeStatus) { const sleep = /夜间休息|已预约/.test(value); themeStatus.textContent = sleep ? '夜间休息 · 北京时间' : (aiEnabled() ? '学习流程 · 多模型接入' : '学习流程 · 不接入 AI'); panel.dataset.sleeping = String(sleep); }
         const log = panel?.querySelector('[data-skipped-log]');
         if (log) {
             const entries = GM_getValue(`xxt-skipped:${autoKey}`, []) || [];
@@ -121,7 +123,7 @@
         topicOwner?.cancel(); topicOwner = null; topicReportedTask = '';
         pageReviewNeeded = false; pageSignature = ''; pageChangedAt = Date.now(); pageBlockedAt = 0;
         stepTransition = null; currentCard = ''; stepDone = new Set(); pageVideo = null;
-        completedFileAssets.clear(); skippedAssets.clear(); skippedMarkers.clear();
+        completedFileAssets.clear(); skippedAssets.clear(); skippedMarkers.clear(); skippedQuizWindows.clear();
         videoSettlements.clear();
         if (coursePage() && task) {
             for (const [source, entry] of quizFrames) {
@@ -201,7 +203,7 @@
                 await start({ recovery: true });
                 return;
             }
-            if (!recoveryAttempts.has(context)) {
+            if (aiEnabled() && !recoveryAttempts.has(context)) {
                 recoveryAttempts.add(context);
                 notify(`遇到问题：${reason}。自动测试 AI 并重新开始一次…`);
                 try { await request('/health'); }
@@ -224,6 +226,14 @@
             const marker = view?.markers.find(item => !item.done && !skippedMarkers.has(item.element) && item.kind !== 'check');
             const question = view?.questions.find(asset => !questionDone(asset));
             const asset = video || file || (!marker && question);
+            if (!aiEnabled() && /视频弹题/.test(reason)) {
+                for (const hit of Q.across(pageWindow)) skippedQuizWindows.add(hit.win);
+                for (const [source, entry] of quizFrames) {
+                    skippedQuizWindows.add(source);
+                    post(source, 'stop', { target: entry.nonce });
+                }
+                quizFrames.clear();
+            }
             if (asset) {
                 skippedAssets.add(asset.id);
                 let container = asset.container || asset.entry?.element.closest('.ans-attach-ct');
@@ -318,7 +328,7 @@
         }
         currentCard = id; expectedCheckTask = ''; expectedVideoTask = ''; expectedDocumentTask = '';
         videoSettlements.clear();
-        skippedAssets.clear(); skippedMarkers.clear();
+        skippedAssets.clear(); skippedMarkers.clear(); skippedQuizWindows.clear();
         completedFileAssets.clear();
         documentReportedTask = ''; topicReportedTask = ''; navigationRequested = false; videoFinishProbe = null;
         pageReviewNeeded = false; pageSignature = ''; pageChangedAt = Date.now(); pageBlockedAt = 0; pageVideo = null;
@@ -501,6 +511,7 @@
         return false;
     }
     function request(path, payload) {
+        if (!aiEnabled()) throw new Error('不接入 AI 模式不会发送模型请求');
         const job = XxtAi.request(path, payload); inFlight = job;
         return job.promise;
     }
@@ -635,6 +646,7 @@
     }
     async function solve(submit) {
         if (busy) return;
+        if (!aiEnabled()) { pause('不接入 AI：章节题目留待手动作答，记录后继续'); return; }
         busy = true;
         const currentEpoch = epoch;
         const entries = D.extract(document), questions = entries.map(entry => entry.question);
@@ -766,6 +778,11 @@
         else throw new Error('未找到下一节按钮，请手动返回课程');
     }
     async function processResult(result) {
+        if (!aiEnabled()) {
+            if (result.allCorrect) await navigate(`最终成绩 ${result.finalScore}/${result.maxScore}，已全对`);
+            else pause('不接入 AI：保留现有成绩，不重做，记录后继续');
+            return;
+        }
         if (result.ambiguous) throw new Error('结果页有多个重做按钮，已停止');
         if (!result.allCorrect && record.phase === 'redo-clicked' && !record.redoConfirmed && result.fingerprint === record.priorResult) { await finishRedo(); return; }
         // A persisted completion is not proof that the prior navigation message was delivered.
@@ -1054,6 +1071,7 @@
                     }
                     continue;
                 }
+                if (!aiEnabled()) throw new Error('不接入 AI：视频弹题阻止播放，跳过受阻内容并留待手动处理');
                 if (!entry) {
                     throw new Error('检测到视频弹题，但题目或选项无法识别，已暂停');
                 }
@@ -1219,7 +1237,7 @@
         }
         if (coursePage() && syncCard()) return;
         try {
-            const videoQuiz = Q.across(pageWindow).find(hit => !quizFrames.has(hit.win));
+            const videoQuiz = Q.across(pageWindow).find(hit => !quizFrames.has(hit.win) && !skippedQuizWindows.has(hit.win));
             if (videoQuiz && (coursePage() || isTop || quizAuthorized)) { await solveVideoQuiz(videoQuiz); return; }
             if (hasVideoQuiz()) return;
             if (coursePage() && await coordinatePage()) return;
@@ -1228,6 +1246,7 @@
             if (await readTopics()) return;
             if (await readDocuments()) return;
             if (D.enabled(document.querySelector('.btnSubmit.workBtnIndex')) && D.extract(document).length) {
+                if (!aiEnabled()) { pause('不接入 AI：章节题目留待手动作答，记录后继续'); return; }
                 if (record.phase === 'submitted') {
                     if (!record.confirmed) { busy = true; await finishSubmission(); return; }
                     if (uiTimedOut(record.at, 30000)) throw new Error('提交后未出现成绩，已停止，避免重复提交');
@@ -1325,7 +1344,7 @@
             if (!recovery) {
                 // Explicit Start retries this card's failed work. Historical logs
                 // remain, but must not keep the current editable quiz excluded.
-                skippedAssets.clear(); skippedMarkers.clear();
+                skippedAssets.clear(); skippedMarkers.clear(); skippedQuizWindows.clear();
                 skippedChapters.delete(courseTask()); recoveryAttempts.delete(courseTask());
                 pageBlockedAt = 0; pageReviewNeeded = true;
             }
@@ -1347,7 +1366,7 @@
                 return;
             }
             if (window.app) { window.app.configs.autoplay = true; window.app.play(); }
-            notify('自动模式已开启：视频后进入检测；全对继续，未全对按平台剩余次数重做。');
+            notify(aiEnabled() ? '自动模式已开启：视频后进入检测；全对继续，未全对按平台剩余次数重做。' : '不接入 AI：自动处理视频和阅读，题目记录后跳过；跳过不等于完成。');
         } else {
             if (!isTop) { const since = Date.now(); report('start'); await D.delay(800); if (grantAt < since && !task) setTask(localTask()); }
             else if (!task) setTask(localTask());
@@ -1379,6 +1398,7 @@
                     if (action === 'stop') stop();
                     if (action === 'start') await start();
                     if (action === 'solve') {
+                        if (!aiEnabled()) { notify('不接入 AI 模式不提供答案；如需此功能，请先切换为接入 AI。'); return; }
                         recoverySerial++; recovering = false; inFlight?.abort();
                         automatic = false; stopped = true; stopPlayer();
                         if (coursePage()) for (const [source, entry] of controlledFrames()) post(source, 'stop', { target: entry.nonce });
@@ -1390,6 +1410,7 @@
                         await solve(false);
                     }
                     if (action === 'connect') {
+                        if (!aiEnabled()) { notify('不接入 AI 模式无需连接测试，点击“开始自动”即可。'); return; }
                         if (busy) throw new Error('请先停止当前任务再测试 AI');
                         await request('/health'); notify('AI 连接测试通过，点击“开始自动”即可。');
                     }
@@ -1401,7 +1422,7 @@
         const details = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = '查看发送给 AI 的题目截图'; details.append(summary);
         const runLog = document.createElement('details'); runLog.dataset.skippedLog = 'true';
         const logTitle = document.createElement('summary'); logTitle.textContent = '跳过记录';
-        const logNote = document.createElement('p'); logNote.textContent = '自动异常每章先测试 AI 并重新开始一次（短请求可能计费），再次失败则记录待复核并继续。跳过不等于平台已完成。记录仅保存在当前浏览器，显示最近20项。';
+        const logNote = document.createElement('p'); logNote.textContent = '自动异常在 AI 模式下每章先测试 AI 并重新开始一次（短请求可能计费）；不接入 AI 时直接记录并继续。跳过不等于平台已完成。记录仅保存在当前浏览器，显示最近20项。';
         runLog.append(logTitle, logNote, document.createElement('ul'));
         panel.append(actions, output, details);
         themeStatus = XxtAssistantTheme.decorate(panel, { title, actions, output, details, runLog, playbackRate: getPlaybackRate(), onRateChange: changePlaybackRate, muted: getMuted(), onMutedChange: changeMuted,
@@ -1454,7 +1475,7 @@
         if (!allowed || !data || data.source !== 'xxt-codex-0.3') return;
         if (coursePage() && event.source !== pageWindow && descendant(pageWindow, event.source)) {
             if (quietNow() && !['stop', 'pause', 'ready', 'video-ready', 'document-ready'].includes(data.type)) return;
-            if (data.type === 'video-quiz-ready' && data.viewVisible !== false && visibleDescendant(pageWindow, event.source)) {
+            if (data.type === 'video-quiz-ready' && !skippedQuizWindows.has(event.source) && data.viewVisible !== false && visibleDescendant(pageWindow, event.source)) {
                 if (task && task !== courseTask()) return;
                 if (typeof data.quizSignature !== 'string' || retiredQuizForms.has(`${data.nonce}/${data.quizSignature}`)) return;
                 // Document access alone does not prove the parent scanner saw

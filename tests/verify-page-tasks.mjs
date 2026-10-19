@@ -16,7 +16,7 @@ const media = `data:audio/wav;base64,${wav.toString('base64')}`;
 const observations = [];
 const marker = '<div class="ans-job-icon" aria-label="任务点未完成"></div>';
 const videoFrame = (n, cross = false) => `<div class="ans-attach-ct videoContainer" id="ext-gen1050" data-video="${n}">${marker}<iframe class="ans-insertvideo-online" jobid="video-${n}" objectid="object-${n}" src="${cross ? 'https://mooc1-1.chaoxing.com' : ''}/ananas/modules/video/index.html?n=${n}" style="width:850px;height:350px"></iframe></div>`;
-async function scenario({ name, mixed = false, lazy = false, unknown = false, lag = false, stop = false, cross = false, replay = false, replayFails = false, stopReplay = false, heal = false, stopRecovery = false, onlyRecovery = false, quietRecovery = false, promptNext = false, unknownAfterResult = false, background = false } = {}) {
+async function scenario({ name, mixed = false, lazy = false, unknown = false, lag = false, stop = false, cross = false, replay = false, replayFails = false, stopReplay = false, heal = false, stopRecovery = false, onlyRecovery = false, quietRecovery = false, promptNext = false, unknownAfterResult = false, background = false, noAi = false, popup = false } = {}) {
     const context = await browser.newContext({ viewport: { width: 1500, height: 1200 } });
     const events = [];
     await context.exposeBinding('__event', (_, value) => events.push(value));
@@ -36,6 +36,7 @@ async function scenario({ name, mixed = false, lazy = false, unknown = false, la
             return { abort() {} };
         };
     });
+    if (noAi) await context.addInitScript(() => { GM_setValue('xxt-ai-enabled',false); GM_setValue('xxt-ai-config',{}); });
     await context.route('**/*', async route => {
         const u = new URL(route.request().url());
         let body;
@@ -58,8 +59,17 @@ async function scenario({ name, mixed = false, lazy = false, unknown = false, la
         await page.locator('[data-action="start"]').click();
         const first = page.frames().find(frame => frame.url().includes('/modules/video/') && frame.url().includes('n=1'));
         await first.waitForFunction(() => !document.querySelector('video').paused);
+        if (noAi) {
+            assert.equal(await page.locator('[data-setting="ai-mode"]').inputValue(),'off');
+            assert(await page.locator('[data-action="connect"]').isDisabled());
+            assert(await page.locator('[data-action="solve"]').isDisabled());
+        }
+        if (popup) {
+            const html = await readFile(new URL('./fixtures/video-quiz-synthetic.html',import.meta.url),'utf8');
+            await first.evaluate(html => { const box=document.createElement('section');box.className='ans-videoquiz';box.innerHTML=html;box.querySelector('#videoquiz-continue').style.display='none';document.body.append(box);document.querySelector('video').pause(); },html);
+        }
         assert(!events.includes('model')); assert(!events.includes('card:1'));
-        await first.evaluate(() => { const v = document.querySelector('video'); v.currentTime = v.duration - 0.05; });
+        if (!popup) await first.evaluate(() => { const v = document.querySelector('video'); v.currentTime = v.duration - 0.05; });
         await page.waitForFunction(() => [...document.querySelectorAll('iframe')].length > 0);
         let second;
         for (let n = 0; n < 40 && !second; n++) { second = page.frames().find(frame => frame.url().includes('/modules/video/') && frame.url().includes('n=2')); if (!second) await page.waitForTimeout(100); }
@@ -150,9 +160,15 @@ async function scenario({ name, mixed = false, lazy = false, unknown = false, la
             assert.equal(skipped.length>0,!heal,'Skipped content must be recorded separately, without inventing platform completion.');
         }
         if(replay)assert.equal(events.filter(x=>x==='replay:2').length,1);
-        assert.equal(events.filter(x => x === 'model').length, mixed ? 2 : 1, 'Each quiz page needs its own result, even with repeated question IDs.');
+        assert.equal(events.filter(x => x === 'model').length, noAi ? 0 : mixed ? 2 : 1, 'Each quiz page needs its own result, even with repeated question IDs.');
         assert(events.indexOf('ended:2') < events.indexOf('card:1'));
-        if (mixed) { assert(events.indexOf('doc-close') < events.indexOf('model')); assert.equal(events.filter(x => x === 'submit').length, 2); }
+        if (mixed) { if (!noAi) assert(events.indexOf('doc-close') < events.indexOf('model')); assert.equal(events.filter(x => x === 'submit').length, noAi ? 0 : 2); }
+        if(noAi) {
+            assert(!events.includes('probe')); assert(!events.includes('submit'));
+            const skipped=await page.evaluate(()=>Object.entries(localStorage).filter(([k])=>k.startsWith('xxt-skipped:')).flatMap(([,v])=>JSON.parse(v)));
+            assert(skipped.some(x=>/不接入 AI/.test(x.reason)));
+            await page.screenshot({path:`${temp}/${name}.png`});
+        }
         observations.push({ name, events });
     } catch (error) {
         if(replay) for(const frame of page.frames()) console.error(await frame.evaluate(()=>({path:location.pathname,ended:document.querySelector('video')?.ended,replay:document.querySelector('.vjs-play-control')?.outerHTML,messages:window.__settlementMessages})).catch(()=>null));
@@ -162,7 +178,8 @@ async function scenario({ name, mixed = false, lazy = false, unknown = false, la
     } finally { await context.close(); }
 }
 try {
-    if(process.argv.includes('--background-only')) {await scenario({name:'background-settlement-recheck',lag:true,background:true});}
+    if(process.argv.includes('--no-ai')) { await scenario({name:'no-ai-videos-documents-two-checks',mixed:true,noAi:true}); await scenario({name:'no-ai-same-origin-popup',noAi:true,popup:true}); await scenario({name:'no-ai-cross-origin-popup',noAi:true,cross:true,popup:true}); await scenario({name:'no-ai-stop-video',noAi:true,stop:true}); }
+    else if(process.argv.includes('--background-only')) {await scenario({name:'background-settlement-recheck',lag:true,background:true});}
     else if(process.argv.includes('--result-only')) {await scenario({name:'graded-100-restart-then-skip-unknown',unknownAfterResult:true});}
     else if(process.argv.includes('--navigation-only')) {await scenario({name:'skip-confirms-incomplete-task-next',unknown:true,promptNext:true});await scenario({name:'answers-only-cancels-auto-restart',unknown:true,onlyRecovery:true});}
     else if (process.argv.includes('--settlement-only')) {

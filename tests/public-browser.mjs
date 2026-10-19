@@ -22,6 +22,7 @@ try{
    document.getElementById('videoquiz-continue').onclick=()=>{window.__continues++;document.querySelector('.ans-videoquiz').remove();};
   },protocol);
   await page.addScriptTag({content:bundle});await page.evaluate(()=>{window.html2canvas=async()=>({toDataURL:()=>'data:image/png;base64,aGVsbG8='});});
+ await page.locator('[data-setting=ai-mode]').selectOption('on');
   const settings=page.locator('[data-ai-settings]');await settings.locator('summary').click();
   for(const value of ['deepseek','xiaomi','kimi','zhipu','qwen','doubao','siliconflow'])assert.equal(await settings.locator(`[data-ai-field=provider] option[value=${value}]`).count(),1);
   await settings.locator('[data-ai-field=provider]').selectOption('custom');await settings.locator('[data-ai-field=protocol]').selectOption(protocol);

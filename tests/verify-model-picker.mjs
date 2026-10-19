@@ -16,6 +16,7 @@ await page.addInitScript(()=>{
 const observations=[];
 try {
  await page.goto('https://mooc1.chaoxing.com/mycourse/studentstudy?courseId=model-fixture'); await page.addScriptTag({content:bundle});
+ await page.locator('[data-setting=ai-mode]').selectOption('on');
  const settings=page.locator('[data-ai-settings]'),provider=settings.locator('[data-ai-field=provider]'),picker=settings.locator('[data-ai-model-picker]'),manual=settings.locator('[data-ai-field=model]'),reasoning=settings.locator('[data-ai-field=reasoning]');
  await settings.locator('summary').click();
  for(const p of ['openai','claude','gemini','deepseek','xiaomi','kimi','zhipu','qwen','doubao','siliconflow']) {

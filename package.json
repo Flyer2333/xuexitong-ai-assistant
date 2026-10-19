@@ -1,6 +1,6 @@
 {
   "name": "xuexitong-ai-assistant",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "private": true,
   "description": "超星学习通自动化脚本（支持接入各种主流AI模型api）",
   "scripts": {
@@ -20,7 +20,8 @@
     "test:nested-recovery": "node tests/verify-nested-check-recovery.mjs",
     "test:background": "node tests/verify-page-tasks.mjs --background-only && node tests/verify-video-submission-recovery.mjs --background-only && node tests/verify-player-guards.mjs",
     "test:late-popup": "node tests/verify-late-video-popup.mjs && node tests/verify-quiet-hours.mjs",
-    "test:video-lines": "node tests/verify-video-lines.mjs"
+    "test:video-lines": "node tests/verify-video-lines.mjs",
+    "test:no-ai": "node tests/verify-no-ai-mode.mjs && node tests/verify-page-tasks.mjs --no-ai"
   },
   "engines": {
     "node": ">=20.11"

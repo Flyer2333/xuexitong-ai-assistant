@@ -14,7 +14,7 @@
     }
     function scan(root) {
         const videos = [], documents = [], questions = [], markers = [], loading = [];
-        function visit(win, path, owner = null, skipDocuments = false, depth = 0) {
+        function visit(win, path, owner = null, skipDocuments = false, depth = 0, inheritedContainer = null) {
             if (depth > 7) return;
             let doc;
             try { doc = win.document; if (!doc?.body) return; } catch { return; }
@@ -26,7 +26,8 @@
                     video, win, root: win, container: owner?.closest('.ans-attach-ct') || video.closest('.ans-attach-ct') });
             }
             const forms = D.extract(doc).filter(entry => D.visible(entry.element)).map(entry => entry.element);
-            if (forms.length || D.readResult(doc)) questions.push({ id: `check:${path}`, win, root: win, frame: owner, forms });
+            if (forms.length || D.readResult(doc)) questions.push({ id: `check:${path}`, win, root: win, frame: owner, forms,
+                containers: [...new Set([...forms.map(form => form.closest('.ans-attach-ct')), inheritedContainer].filter(Boolean))] });
             for (const wrapper of doc.querySelectorAll('.ans-attach-ct')) {
                 const icon = ownIcons(wrapper)[0];
                 // Folded required tasks still block completion; a hidden container is
@@ -42,7 +43,8 @@
                 if (frame.closest('[data-xxt-codex-panel]')) continue;
                 const childPath = `${path}/${index}`, before = videos.length;
                 const src = frame.getAttribute('src') || '';
-                visit(frame.contentWindow, childPath, frame, skipDocuments || files.some(entry => entry.element === frame || entry.element.contains(frame)), depth + 1);
+                visit(frame.contentWindow, childPath, frame, skipDocuments || files.some(entry => entry.element === frame || entry.element.contains(frame)), depth + 1,
+                    frame.closest('.ans-attach-ct') || inheritedContainer);
                 if (/\/modules\/video\//.test(src) && videos.length === before) videos.push({
                     id: `video:${childPath}/${frame.getAttribute('jobid') || frame.getAttribute('objectid') || 'waiting'}`,
                     video: null, win: frame.contentWindow, root: frame.contentWindow, container: frame.closest('.ans-attach-ct') });
@@ -57,7 +59,7 @@
         // prerequisite. Attribute only to the form's own wrapper/frame.
         for (const marker of markers) if (marker.kind === 'unknown' && questions.some(question =>
             question.forms.some(form => form.closest('.ans-attach-ct') === marker.element) ||
-            question.frame?.closest('.ans-attach-ct') === marker.element)) marker.kind = 'check';
+            question.containers.includes(marker.element))) marker.kind = 'check';
         for (const marker of markers) if (marker.kind === 'unknown' && documents.some(asset =>
             asset.entry.element.closest('.ans-attach-ct') === marker.element)) marker.kind = 'document';
         return { videos, documents, questions, markers, loading,

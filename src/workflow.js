@@ -228,6 +228,7 @@
                 let container = asset.container || asset.entry?.element.closest('.ans-attach-ct');
                 try { container ||= asset.root?.frameElement?.closest('.ans-attach-ct'); } catch {}
                 if (container) skippedMarkers.add(container);
+                for (const owner of asset.containers || []) skippedMarkers.add(owner);
                 if (asset.video) asset.video.pause();
             } else if (marker) skippedMarkers.add(marker.element);
             pageBlockedAt = 0; unknownSince = 0; unknownTask = ''; videoFinishProbe = null;
@@ -1304,6 +1305,13 @@
         if (coursePage()) {
             setTask(courseTask());
             if (syncCard()) return;
+            if (!recovery) {
+                // Explicit Start retries this card's failed work. Historical logs
+                // remain, but must not keep the current editable quiz excluded.
+                skippedAssets.clear(); skippedMarkers.clear();
+                skippedChapters.delete(courseTask()); recoveryAttempts.delete(courseTask());
+                pageBlockedAt = 0; pageReviewNeeded = true;
+            }
             if (!checkStep() && expectedCheckTask !== courseTask()) expectedVideoTask = courseTask();
             completedTasks.delete(courseTask());
             for (const [source, entry] of frames) {

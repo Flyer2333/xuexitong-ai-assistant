@@ -15,7 +15,11 @@
   if(typeof raw!=='string'||raw.length>1024*1024)throw Error('字体字典大小无效');
   const sha=[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(raw)))].map(x=>x.toString(16).padStart(2,'0')).join('');
   if(sha!==hash)throw Error('字体字典校验未通过');const table=JSON.parse(raw);
-  if(!table||Array.isArray(table)||Object.values(table).some(x=>!Number.isInteger(Number(x))||Number(x)<1||Number(x)>65535))throw Error('字体字典格式无效');return table;
+  if(!table||Array.isArray(table)||typeof table!=='object')throw Error('字体字典格式无效');
+  // The pinned public dictionary also contains author/license/version metadata.
+  // Only eight-digit glyph fingerprints are mappings; never interpret metadata as code points.
+  const mappings=Object.entries(table).filter(([key])=>/^[a-f0-9]{8}$/.test(key));
+  if(!mappings.length||mappings.some(([,x])=>!Number.isInteger(Number(x))||Number(x)<1||Number(x)>65535))throw Error('字体字典格式无效');return Object.fromEntries(mappings);
  }
  function loadTable(){
   if(!tablePromise)tablePromise=(async()=>{

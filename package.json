@@ -1,6 +1,6 @@
 {
   "name": "xuexitong-ai-assistant",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "超星学习通自动化脚本（支持接入各种主流AI模型api）",
   "scripts": {

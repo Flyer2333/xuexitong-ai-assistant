@@ -2,6 +2,7 @@ import {readFileSync,readdirSync,statSync} from 'node:fs';
 import {resolve,relative} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import assert from 'node:assert/strict';
+import {fontDependenciesCode} from './font-dependencies.mjs';
 import {themeAssetCode} from './theme-assets.mjs';
 const root=resolve(import.meta.dirname,'..');
 function walk(dir){return readdirSync(dir).flatMap(name=>{if(['.git','node_modules','artifacts','local'].includes(name))return [];const path=resolve(dir,name);return statSync(path).isDirectory()?walk(path):[path];});}
@@ -21,8 +22,11 @@ for(const path of paths){
 }
 const script=readFileSync(resolve(root,'dist/xuexitong-ai-assistant.user.js'),'utf8');
 assert(script.includes(themeAssetCode()),'Stale theme assets');
-for(const name of ['core.cjs','retry.cjs','dom.js','capture.js','documents.js','reading.js','page-tasks.js','interruptions.js','video-lines.js','video-quiz.js','models.cjs','locator.cjs','run-ledger.cjs','dispatch.cjs','diagnostics.cjs','ai.js','updates.cjs','theme.js','workflow.js','player.js'])assert(script.includes(readFileSync(resolve(root,'src',name),'utf8')),`Stale build: ${name}`);
+assert(script.includes(fontDependenciesCode()),'Stale font dependencies');
+for(const name of ['core.cjs','retry.cjs','fonts.js','dom.js','capture.js','documents.js','reading.js','page-tasks.js','interruptions.js','video-lines.js','video-quiz.js','models.cjs','locator.cjs','run-ledger.cjs','dispatch.cjs','diagnostics.cjs','profiles.cjs','ai.js','updates.cjs','theme.js','workflow.js','player.js'])assert(script.includes(readFileSync(resolve(root,'src',name),'utf8')),`Stale build: ${name}`);
 const {version}=JSON.parse(readFileSync(resolve(root,'package.json'),'utf8'));
+const readme=readFileSync(resolve(root,'README.md'),'utf8'),notice=`目前脚本最新版本为 ${version}，请已安装脚本的用户尽快更新`;
+assert(readme.includes(notice)&&readme.indexOf(notice)<readme.indexOf('\n## '),'README latest-version reminder must match package version and precede features');
 assert(script.includes(`@version      ${version}`));assert(script.includes('@connect      *'));
 const release=JSON.parse(readFileSync(resolve(root,'src/release.json'),'utf8'));
 assert.equal(release.version,version);assert.deepEqual(JSON.parse(readFileSync(resolve(root,'dist/release.json'),'utf8')),release);

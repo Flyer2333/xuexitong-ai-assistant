@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import {fontDependenciesCode} from './font-dependencies.mjs';
 import { themeAssetCode } from './theme-assets.mjs';
 const root = resolve(import.meta.dirname, '..');
 const {version} = JSON.parse(readFileSync(resolve(root,'package.json'),'utf8'));
@@ -25,8 +26,8 @@ const header = `// ==UserScript==
 // ==/UserScript==
 
 `;
-const files = ['vendor/jquery-3.6.0.min.js','vendor/html2canvas-1.4.1.min.js','src/core.cjs','src/retry.cjs','src/dom.js','src/capture.js','src/documents.js','src/reading.js','src/page-tasks.js','src/interruptions.js','src/video-lines.js','src/video-quiz.js','src/models.cjs','src/locator.cjs','src/run-ledger.cjs','src/dispatch.cjs','src/diagnostics.cjs','src/ai.js','src/updates.cjs','src/theme.js','src/workflow.js','src/player.js'];
-const content = header + '(() => { const module = undefined, exports = undefined, define = undefined;\n' + `globalThis.XxtRelease = ${JSON.stringify(release)};\n` + themeAssetCode() + files.map(path=>readFileSync(resolve(root,path),'utf8')).join('\n') + '\n})();\n';
+const files = ['vendor/jquery-3.6.0.min.js','vendor/html2canvas-1.4.1.min.js','src/core.cjs','src/retry.cjs','src/fonts.js','src/dom.js','src/capture.js','src/documents.js','src/reading.js','src/page-tasks.js','src/interruptions.js','src/video-lines.js','src/video-quiz.js','src/models.cjs','src/locator.cjs','src/run-ledger.cjs','src/dispatch.cjs','src/diagnostics.cjs','src/profiles.cjs','src/ai.js','src/updates.cjs','src/theme.js','src/workflow.js','src/player.js'];
+const content = header + '(() => { const module = undefined, exports = undefined, define = undefined;\n' + `globalThis.XxtRelease = ${JSON.stringify(release)};\n` + themeAssetCode() + fontDependenciesCode() + files.map(path=>readFileSync(resolve(root,path),'utf8')).join('\n') + '\n})();\n';
 mkdirSync(resolve(root,'dist'),{recursive:true});
 writeFileSync(resolve(root,'dist/xuexitong-ai-assistant.user.js'),content);
 writeFileSync(resolve(root,'dist/xuexitong-ai-assistant.meta.js'),header);

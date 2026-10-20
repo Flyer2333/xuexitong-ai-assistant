@@ -39,6 +39,7 @@ try {
  assert.equal(calls[1].auth,'Bearer vision-key');assert.equal(calls[1].url,'https://vision.example.invalid/v1/chat/completions');assert.equal(calls[1].body.messages[0].content[1].type,'image_url');
  await vision.getByText('测试图片识别（可能计费）',{exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-vision-settings] [role=status]').textContent.includes('随机数字图片识别通过'));
  const probe=await page.evaluate(()=>({prompt:__calls.at(-1).body.messages[0].content[0].text,code:__drawnCode}));assert(!probe.prompt.includes(probe.code),'Expected answer must not appear in text prompt');
+ await page.getByRole('dialog').getByText('知道了',{exact:true}).click();
  await page.evaluate(()=>window.__slow=true);await vision.getByText('测试图片识别（可能计费）',{exact:true}).click();await page.locator('[data-action=stop]').click();
  await page.waitForFunction(()=>document.querySelector('[data-vision-settings] [role=status]').textContent.includes('停止'));assert((await page.evaluate(()=>__aborts))>=1);
  await page.locator('[data-setting=ai-mode]').selectOption('off');assert(await vision.isHidden());assert(await main.isHidden());

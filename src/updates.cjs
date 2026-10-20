@@ -23,7 +23,16 @@
         if(connection?.type && !['unknown','other'].includes(connection.type)) return {wifi:false,message:'当前未识别为 WLAN，仅手动检查可用。'};
         return {wifi:false,message:'浏览器未提供 WLAN 类型，无法自动判断；可手动检查。'};
     }
-    function create() {
+    function create({bannerHost} = {}) {
+        const banner=document.createElement('aside');banner.className='xxt-update-banner';banner.dataset.updateBanner='true';banner.hidden=true;
+        const bannerText=document.createElement('strong'),bannerActions=document.createElement('div');bannerText.setAttribute('role','status');
+        const bannerInstall=document.createElement('button'),later=document.createElement('button'),close=document.createElement('button');
+        bannerInstall.type=later.type=close.type='button';bannerInstall.textContent='查看并更新';later.textContent='稍后提醒';close.textContent='×';close.setAttribute('aria-label','关闭本版本更新提示');close.className='xxt-update-close';
+        bannerActions.append(bannerInstall,later);banner.append(bannerText,bannerActions,close);bannerHost?.prepend(banner);
+        let available=null;
+        const showBanner=()=>{banner.hidden=!available||GM_getValue('xxt-update-dismissed','')===available.version||Number(GM_getValue('xxt-update-snooze-until',0))>Date.now();};
+        close.onclick=()=>{if(available)GM_setValue('xxt-update-dismissed',available.version);showBanner();};
+        later.onclick=()=>{GM_setValue('xxt-update-snooze-until',Date.now()+6*60*60*1000);showBanner();};
         const section=document.createElement('details'); section.dataset.xxtUpdates='true';
         const heading=document.createElement('summary'); heading.textContent=`脚本更新 · ${release.version}`;
         const content=document.createElement('div'); content.className='ai-form';
@@ -61,15 +70,16 @@
                     onload(response){try{if(response.status!==200 || (response.finalUrl && new URL(response.finalUrl).origin!==new URL(manifestUrl).origin) || response.responseText.length>20000)throw Error('无法获取更新信息');resolve(validate(JSON.parse(response.responseText)));}catch{reject(Error('更新信息读取失败，可稍后重试或使用油猴检查更新。'));}},
                     onerror:()=>reject(Error('更新检查连接失败，可稍后重试或使用油猴检查更新。')),ontimeout:()=>reject(Error('更新检查超时，可稍后重试。'))}));
                 const newer=compare(data.version,release.version)>0;install.hidden=!newer;
-                if(newer){install.textContent=`更新至 ${data.version}`;status.textContent=`发现新版本 ${data.version}。`;showNotes(data,'新版本更新内容');section.open=true;}
-                else {status.textContent=compare(data.version,release.version)<0?'已安装版本高于当前发布版本，无需降级。':`当前已是最新版本 ${release.version}。`;showNotes(release);}
+                if(newer){available=data;bannerText.textContent=`发现新版本 ${data.version}，当前为 ${release.version}。更新由你决定。`;showBanner();install.textContent=`更新至 ${data.version}`;status.textContent=`发现新版本 ${data.version}。`;showNotes(data,'新版本更新内容');section.open=true;}
+                else {available=null;showBanner();status.textContent=compare(data.version,release.version)<0?'已安装版本高于当前发布版本，无需降级。':`当前已是最新版本 ${release.version}。`;showNotes(release);}
             }catch(error){status.textContent=error.message;}finally{busy=false;check.disabled=false;}
         }
         install.onclick=()=>{try{GM_openInTab(installUrl,{active:true,insert:true});status.textContent='已打开更新页，请在油猴确认更新；完成后刷新课程页。若没有出现更新页，请展开“更新方法（油猴）”。';instructions.open=true;}catch{status.textContent='无法打开更新页，请按下方步骤在油猴管理面板检查更新。';instructions.open=true;}};
+        bannerInstall.onclick=()=>{section.open=true;install.click();};
         check.onclick=()=>checkUpdate(true);
         auto.onchange=()=>{GM_setValue('xxt-update-wifi',auto.checked);networkNote.textContent=network(navigator).message;if(auto.checked)void checkUpdate();};
         buttons.append(check,install);content.append(autoLabel,networkNote,buttons,status,notes,acknowledge,instructions);section.append(heading,content);
-        const refresh=()=>{networkNote.textContent=network(navigator).message;void checkUpdate();};
+        const refresh=()=>{showBanner();networkNote.textContent=network(navigator).message;void checkUpdate();};
         networkNote.textContent=network(navigator).message;
         const timer=setInterval(()=>{if(!section.isConnected){clearInterval(timer);window.removeEventListener('online',refresh);navigator.connection?.removeEventListener?.('change',refresh);return;}refresh();},60000);
         window.addEventListener('online',refresh);navigator.connection?.addEventListener?.('change',refresh);queueMicrotask(()=>{if(section.isConnected)void checkUpdate();});

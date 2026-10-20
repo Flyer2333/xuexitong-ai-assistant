@@ -134,7 +134,9 @@
                             if (response.status < 200 || response.status >= 300) { const error=new Error(({ 400: 'API 参数或模型不兼容', 401: 'API Key 或连接码无效', 403: 'API 权限或地区限制', 404: '模型或接口地址不存在', 429: '触发速率限制或余额不足' })[response.status] || `API 返回 HTTP ${response.status}`);error.status=response.status;throw error; }
                             if (response.responseText.length > 8 * 1024 * 1024) throw new Error('API 响应过大');
                             let data; try { data = JSON.parse(response.responseText); } catch { throw new Error('API 返回非 JSON，请检查地址或网络'); }
-                            resolve(parse(spec.protocol, data, payload?.questions, probe, imageTest));
+                            const result=parse(spec.protocol, data, payload?.questions, probe, imageTest);
+                            try{root.XxtProfiles?.create(GM_getValue,GM_setValue).markUsed(c);}catch{}
+                            resolve(result);
                         } catch (error) { reject(error); }
                     },
                     onerror() { if (!settled) { settled = true; reject(new Error('AI 连接失败：检查地址、网络与油猴跨域授权')); } },

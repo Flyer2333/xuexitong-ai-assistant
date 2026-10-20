@@ -1,6 +1,23 @@
 (() => {
     'use strict';
     const css = `
+[data-xxt-codex-panel] .xxt-update-banner{position:relative;background:var(--tint);border-bottom:2px solid var(--accent);padding:12px 40px 12px 16px;overflow-wrap:anywhere}
+[data-xxt-codex-panel] .xxt-update-banner strong{display:block;font-size:13px;color:var(--accent)}
+[data-xxt-codex-panel] .xxt-update-banner button{border:1px solid var(--line);background:#fff;color:var(--accent);border-radius:8px;padding:5px 9px;margin:8px 6px 0 0}
+[data-xxt-codex-panel] .xxt-update-banner .xxt-update-close{position:absolute;right:5px;top:3px;font-size:20px;border:0;background:transparent;margin:0;padding:0;width:30px;height:30px}
+[data-xxt-codex-panel] .xxt-profile-list{max-height:280px;overflow:auto;margin-top:10px}
+[data-xxt-codex-panel] .xxt-profile{display:grid;gap:5px;padding:10px;background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;overflow-wrap:anywhere}
+[data-xxt-codex-panel] .xxt-profile strong{font-size:12px}
+[data-xxt-codex-panel] [data-saved-profiles] p{font-size:11px;color:var(--muted)}
+[data-xxt-codex-panel] .xxt-test-result{color:var(--ink);font:14px/1.7 system-ui,'Microsoft YaHei',sans-serif;background:var(--surface);border:1px solid var(--line);border-radius:22px;max-width:min(380px,calc(100vw - 32px));padding:24px;text-align:center;box-shadow:0 20px 70px #17255430;overflow-wrap:anywhere}
+[data-xxt-codex-panel] .xxt-test-result::backdrop{background:#17255455}
+[data-xxt-codex-panel] .xxt-test-result h3{color:var(--accent);font-size:18px;margin:8px 0}
+[data-xxt-codex-panel] .xxt-test-result[data-image-test-result=failure] h3{color:#a13b4c}
+[data-xxt-codex-panel] .xxt-test-icon{height:100px;display:grid;place-items:center;font-size:52px;color:var(--accent)}
+[data-xxt-codex-panel] .xxt-test-icon img{width:110px;height:100px;object-fit:contain}
+[data-xxt-codex-panel] .xxt-test-result small{display:block;color:var(--muted)}
+[data-xxt-codex-panel] .xxt-test-result button{margin-top:18px;border:0;border-radius:10px;padding:9px 28px;background:var(--button);color:var(--button-ink)}
+
 [data-xxt-codex-panel] button:disabled{opacity:.45;cursor:not-allowed}
 [data-xxt-codex-panel]{--ink:#1e293b;--accent:#4f46e5;--line:#e2e8f0;--surface:#f8fafc;--tint:#eef2ff;--muted:#64748b;--button:#4f46e5;--button-ink:#fff;color:var(--ink)!important;font:13px/1.6 system-ui,'Microsoft YaHei',sans-serif!important;color-scheme:light}
 [data-xxt-codex-panel] *{box-sizing:border-box}
@@ -21,6 +38,23 @@
 [data-xxt-codex-panel] .xxt-state:before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent)}
 [data-xxt-codex-panel][data-sleeping=true] .xxt-state:before{background:#94a3b8}
 [data-xxt-codex-panel] pre{font:inherit!important;margin:0!important;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px!important;white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto;color:#475569}
+[data-xxt-codex-panel] .xxt-status-card{--notice-ink:#9a4518;--notice-bg:#fff4e8;position:relative;isolation:isolate;border:1px solid var(--line);border-radius:16px;background:linear-gradient(135deg,var(--tint),#fff 75%);box-shadow:0 4px 14px #17255406;overflow:hidden}
+[data-xxt-codex-panel] .xxt-status-card:before{content:'';position:absolute;inset:0 auto 0 0;width:3px;background:var(--accent);opacity:.65}
+[data-xxt-codex-panel] .xxt-status-top{display:flex;align-items:center;gap:8px;padding:11px 14px 0;color:var(--muted);font-size:11px}
+[data-xxt-codex-panel] .xxt-status-symbol{display:grid;place-items:center;flex-shrink:0;width:24px;height:24px;border-radius:8px;background:#fff;border:1px solid var(--line);color:var(--accent);font-size:14px;font-weight:700}
+[data-xxt-codex-panel] .xxt-status-badge{margin-left:auto;border-radius:99px;padding:2px 8px;color:var(--accent);background:#fff;border:1px solid var(--line);font-size:10px;white-space:nowrap}
+[data-xxt-codex-panel] .xxt-status-card pre{font-family:'DengXian','等线','Microsoft YaHei UI','PingFang SC',sans-serif!important;font-size:14px!important;font-weight:500!important;font-variant-numeric:tabular-nums;line-height:1.85!important;letter-spacing:.15px;border:0;border-radius:0;background:transparent;color:var(--ink);padding:10px 15px 14px!important;max-height:190px;overflow:auto;overflow-wrap:anywhere}
+[data-xxt-codex-panel] .xxt-status-card pre:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}
+[data-xxt-codex-panel] .xxt-status-card[data-status=success] .xxt-status-symbol{color:#18744c;background:#effaf3}
+[data-xxt-codex-panel] .xxt-status-card[data-status=error] .xxt-status-symbol{color:#a33c45;background:#fff0f1}
+[data-xxt-codex-panel] .xxt-status-card[data-status=paused] .xxt-status-symbol,[data-xxt-codex-panel] .xxt-status-card[data-status=rest] .xxt-status-symbol{color:var(--muted)}
+[data-xxt-codex-panel][data-skin=nailoong] .xxt-status-card{--notice-ink:#80500a;--notice-bg:#fff0c3;background:linear-gradient(130deg,#fff0c6,#fffdf5 80%);border-radius:18px 18px 18px 7px;box-shadow:0 4px 14px #92570d08}
+[data-xxt-codex-panel][data-skin=naiwa] .xxt-status-card{--notice-ink:#686219;--notice-bg:#f7f0c9;background:radial-gradient(ellipse at 100% 0,#f6edb4,transparent 65%),#fffdf1;border-radius:18px 18px 8px 18px;box-shadow:0 4px 14px #6e651009}
+[data-xxt-codex-panel][data-skin=naiwa] .xxt-status-symbol{border-radius:50%;color:#60652d;background:#fffef2}
+[data-xxt-codex-panel] .xxt-api-warning{padding:11px 14px 12px;margin:0;border-top:1px dashed var(--line);background:var(--notice-bg);color:var(--notice-ink);font-family:'DengXian','等线','Microsoft YaHei UI',sans-serif;font-size:12px;line-height:1.8;overflow-wrap:anywhere}
+[data-xxt-codex-panel] .xxt-api-warning strong{display:block;font:600 12px/1.6 system-ui,'Microsoft YaHei',sans-serif;letter-spacing:0;margin-bottom:3px;color:var(--notice-ink)}
+[data-xxt-codex-panel] .xxt-api-warning p{margin:0}
+[data-xxt-codex-panel] .xxt-api-warning time{display:block;margin-top:4px;font-size:11px;font-variant-numeric:tabular-nums;opacity:.85}
 [data-xxt-codex-panel] .xxt-foreground-note{margin:10px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--tint);color:var(--ink);font-size:12px;line-height:1.7}
 [data-xxt-codex-panel] .xxt-settings{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;color:var(--muted);font-size:11px}
 [data-xxt-codex-panel] .xxt-rate-setting{display:flex;width:100%;justify-content:space-between;align-items:center}
@@ -71,6 +105,40 @@
 [data-xxt-codex-panel] [data-skipped-log] li+li{margin-top:6px}
 [data-xxt-codex-panel] [hidden]{display:none!important}
 `;
+    const vault=()=>XxtProfiles.create(GM_getValue,GM_setValue);
+    const profilesChanged=()=>document.dispatchEvent(new Event('xxt-profiles-changed'));
+    function profileManager(onChange){
+        const section=document.createElement('details'),heading=document.createElement('summary'),rows=document.createElement('div'),note=document.createElement('p'),link=document.createElement('a');
+        section.dataset.savedProfiles='true';rows.className='xxt-profile-list';
+        note.textContent='密钥仅保存在此浏览器的油猴存储中，调用时发送到你设置的接口。没有作者收集密钥的服务器；这不是加密保险箱。删除这里只移除本地配置，不撤销服务商密钥。';
+        link.textContent='查看密钥与隐私说明';link.href='https://github.com/Flyer2333/xuexitong-ai-assistant/blob/main/docs/SECURITY.md';link.target='_blank';link.rel='noopener noreferrer';
+        function render(){
+            const saved=vault().list();heading.textContent=`已保存接口 · ${saved.length}`;rows.replaceChildren();
+            for(const p of saved){
+                const item=document.createElement('article'),name=document.createElement('strong'),meta=document.createElement('small'),key=document.createElement('code'),dates=document.createElement('small'),buttons=document.createElement('div');
+                item.className='xxt-profile';name.textContent=`${XxtAi.presets[p.config.provider]?.label||p.config.provider} · ${p.config.model||'Codex'}`;
+                let host;try{host=new URL(p.config.baseUrl).host;}catch{host='地址无效';}
+                meta.textContent=`${host} · ${p.config.protocol}`;key.textContent=XxtProfiles.mask(p.config.key);
+                const date=value=>value?new Date(value).toLocaleString():'尚未成功调用';dates.textContent=`保存：${date(p.createdAt)} / 最近成功调用：${date(p.lastUsedAt)}`;buttons.className='ai-buttons';
+                for(const [label,slot] of [['用于文字','xxt-ai-config'],['用于图片','xxt-ai-vision-config']]){
+                    const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=()=>{const latest=vault().list().find(x=>x.id===p.id);if(!latest)return;onChange();GM_setValue(slot,latest.config);if(slot==='xxt-ai-vision-config')GM_setValue('xxt-ai-vision-enabled',true);profilesChanged();};buttons.append(b);
+                }
+                const remove=document.createElement('button');remove.type='button';remove.textContent='删除配置';remove.onclick=()=>{onChange();vault().remove(p.id);profilesChanged();};buttons.append(remove);item.append(name,meta,key,dates,buttons);rows.append(item);
+            }
+            if(!saved.length)rows.textContent='暂无已保存接口。在接口设置中填写后点击“保存设置”，即可在这里切换或删除。';
+        }
+        try{vault().migrate();}catch{}
+        section.append(heading,rows,note,link);section.addEventListener('toggle',()=>{if(section.open)render();});document.addEventListener('xxt-profiles-changed',render);render();return section;
+    }
+    function imageResult(button,success,message,animate){
+        const panel=button.closest('[data-xxt-codex-panel]'),dialog=document.createElement('dialog');dialog.className='xxt-test-result';dialog.dataset.imageTestResult=success?'success':'failure';dialog.setAttribute('aria-label','图片识别测试结果');
+        const icon=document.createElement('div'),title=document.createElement('h3'),description=document.createElement('p'),scope=document.createElement('small'),close=document.createElement('button');icon.className='xxt-test-icon';
+        const skin=panel.dataset.skin,asset=XxtThemeAssets[skin];
+        if(asset){const img=document.createElement('img');img.src=asset;img.alt='';icon.append(img);}else icon.textContent=success?'✓':'!';
+        title.textContent=success?'恭喜，图片识别测试通过！':'本次图片识别未通过';description.textContent=message;scope.textContent=success?'已识别本次随机数字图片；不代表所有复杂题图都能答对。':'请检查模型是否支持图片、接口地址、密钥与额度。';
+        close.type='button';close.textContent='知道了';close.autofocus=true;close.onclick=()=>dialog.close();dialog.addEventListener('close',()=>{dialog.remove();button.focus();},{once:true});dialog.append(icon,title,description,scope,close);panel.append(dialog);dialog.showModal();
+        if(animate&&GM_getValue('xxt-ui-motion',true)&&!matchMedia('(prefers-reduced-motion: reduce)').matches){dialog.animate([{opacity:0,transform:'translateY(8px) scale(.96)'},{opacity:1,transform:'translateY(0) scale(1)'}],{duration:200,easing:'cubic-bezier(0.23,1,0.32,1)'});if(success)icon.animate([{transform:'rotate(-4deg) scale(.98)'},{transform:'rotate(4deg) scale(1.04)'},{transform:'rotate(0) scale(1)'}],{duration:280,easing:'cubic-bezier(0.23,1,0.32,1)'});}
+    }
     function aiSettings(onChange, storageKey = 'xxt-ai-config') {
         const visionSlot = storageKey !== 'xxt-ai-config';
         const A = XxtAi, section = document.createElement('details'); section.dataset[visionSlot ? 'visionSettings' : 'aiSettings'] = 'true';
@@ -138,17 +206,17 @@
                 const c = Object.fromEntries(Object.entries(fields).map(([key,input]) => [key,input.type === 'checkbox' ? input.checked : input.value]));
                 const old = A.load(storageKey);
                 if (!c.key && c.provider === old.provider && c.protocol === old.protocol && c.baseUrl.replace(/\/+$/,'') === old.baseUrl) c.key = old.key;
-                const valid = A.normalize(c); onChange(); GM_setValue(storageKey, valid); populate(); message.textContent = '已保存。点击“测试 AI”验证（会消耗少量 API 用量）。';
+                const valid = A.normalize(c); onChange(); vault().save(valid); GM_setValue(storageKey, valid); profilesChanged(); populate(); message.textContent = '已保存至已保存接口。点击“测试 AI”验证（会消耗少量 API 用量）。';
             } catch (error) { message.textContent = error.message; }
         };
         const clear = document.createElement('button'); clear.type = 'button'; clear.textContent = '清除密钥';
-        clear.onclick = () => { onChange(); GM_setValue(storageKey,{ ...A.load(storageKey),key:'' }); populate(); message.textContent = '已清除当前密钥。'; };
+        clear.onclick = () => { onChange(); vault().clear(A.load(storageKey)); profilesChanged(); populate(); message.textContent = '已移除当前本地密钥及对应已保存配置；服务商密钥未撤销。'; };
         const imageTest=document.createElement('button');imageTest.type='button';imageTest.textContent='测试图片识别（可能计费）';
-        imageTest.onclick=async()=>{onChange();if(GM_getValue('xxt-quiet-enabled',true)&&globalThis.XxtCodexCore.quietHoursAt()){message.textContent='夜间休息中，07:00 后可测试图片识别';return;}const job=A.testImages(A.load(storageKey));imageTest.disabled=true;message.textContent='正在测试随机数字图片…';try{message.textContent=(await job.promise).message;}catch(error){message.textContent=error.message;}finally{imageTest.disabled=false;}};
+        imageTest.onclick=async event=>{onChange();if(GM_getValue('xxt-quiet-enabled',true)&&globalThis.XxtCodexCore.quietHoursAt()){message.textContent='夜间休息中，07:00 后可测试图片识别';return;}const job=A.testImages(A.load(storageKey));imageTest.disabled=true;message.textContent='正在测试随机数字图片…';try{const result=await job.promise;message.textContent=result.message;imageResult(imageTest,result.verified===true,message.textContent,event.detail>0);}catch(error){message.textContent=error.message;if(!/停止|取消|夜间/.test(error.message))imageResult(imageTest,false,message.textContent,event.detail>0);}finally{imageTest.disabled=false;}};
         form.addEventListener('input',()=>A.cancelImageTest());
         form.addEventListener('change',()=>A.cancelImageTest());
         controls.append(imageTest);
-        controls.append(save,clear); form.append(note,controls,message); section.append(heading,form); populate(); return section;
+        controls.append(save,clear); form.append(note,controls,message); section.append(heading,form); document.addEventListener('xxt-profiles-changed',populate); populate(); return section;
     }
     function decorate(panel, { title, actions, output, details, runLog, onQuietChange, playbackRate, onRateChange, onAiChange, muted, onMutedChange }) {
         const style = document.createElement('style'); style.textContent = css; document.head.append(style);
@@ -176,6 +244,35 @@
         const body = make('div','xxt-body'), fold = make('button','xxt-fold'); fold.textContent = '−'; fold.title = '收起面板';
         fold.onclick = () => { body.hidden = !body.hidden; fold.textContent = body.hidden ? '+' : '−'; fold.title = body.hidden ? '展开面板' : '收起面板'; };
         const status = make('div','xxt-state'); status.textContent = '学习流程 · 多模型接入';
+        const statusCard=make('section','xxt-status-card');statusCard.dataset.status='idle';statusCard.setAttribute('aria-label','运行状态');
+        const statusTop=make('div','xxt-status-top'),symbol=make('span','xxt-status-symbol'),statusTitle=document.createElement('span'),badge=make('span','xxt-status-badge');
+        symbol.setAttribute('aria-hidden','true');statusTitle.textContent='运行状态';badge.setAttribute('role','status');badge.setAttribute('aria-live','polite');statusTop.append(symbol,statusTitle,badge);
+        output.tabIndex=0;output.setAttribute('aria-label','当前运行状态详情');
+        const apiWarning=make('aside','xxt-api-warning');apiWarning.dataset.apiWarning='true';apiWarning.hidden=true;
+        const warningTitle=document.createElement('strong'),warningText=document.createElement('p'),warningTime=document.createElement('time');
+        warningTitle.textContent='!  AI 调用未成功';warningTitle.setAttribute('role','status');warningTitle.setAttribute('aria-live','polite');warningTime.dataset.warningCountdown='true';apiWarning.append(warningTitle,warningText,warningTime);
+        statusCard.append(statusTop,output,apiWarning);
+        let lastStatus,warningUntil=0,warningTimer;
+        const updateStatus=()=>{
+            const text=output.textContent;if(text===lastStatus)return;lastStatus=text;
+            let state='notice',label='请查看提示',icon='i';
+            if(/^夜间休息|^已预约/.test(text)){state='rest';label='夜间休息';icon='☾';}
+            else if(/^AI 配置已更改|^运行模式已保存/.test(text)){state='notice';label='设置已更改';icon='↻';}
+            else if(/已暂停|已停止|^自动操作已停止/.test(text)){state='paused';label='已暂停';icon='Ⅱ';}
+            else if(/^AI 连接测试通过|^随机数字图片识别通过/.test(text)){state='success';label='测试通过';icon='✓';}
+            else if(/^第\s*\d+\s*题/.test(text)){state='notice';label='答案已返回';icon='≡';}
+            else if(/^(?:API |AI 连接失败|无法|未能|未找到|题目.*(?:无效|变化)|模型.*(?:无效|没有|未返回))/.test(text)){state='error';label='需要处理';icon='!';}
+            else if(/^正在|^检测到|^已读取|^已进入|^已提交|^已点击|^AI 正在|^已记录待复核/.test(text)){state='running';label='正在处理';icon='›';}
+            else if(/^选择|^先连接|^不接入 AI 模式无需/.test(text)){state='idle';label='等待开始';icon='◇';}
+            statusCard.dataset.status=state;badge.textContent=label;symbol.textContent=icon;
+        };
+        const statusObserver=new MutationObserver(updateStatus);statusObserver.observe(output,{subtree:true,childList:true,characterData:true});updateStatus();
+        const updateWarning=()=>{const seconds=Math.ceil((warningUntil-Date.now())/1000);apiWarning.hidden=seconds<=0;if(seconds<=0){clearInterval(warningTimer);warningTimer=null;return;}warningTime.textContent=`（${seconds}s 后自动关闭）`;};
+        status.showApiFailure=(until,wasAutomatic)=>{if(until<=Date.now())return;warningUntil=until;warningText.textContent=wasAutomatic?
+            '本次未能取得可用的 AI 答案，请检查接口、模型和余额后重试。脚本仍会按原设置重试或记录跳过题目，继续其余可处理任务；跳过不代表完成。':
+            '本次 AI 调用未成功，请检查接口地址、模型、密钥和余额后重试。';updateWarning();if(!warningTimer)warningTimer=setInterval(updateWarning,1000);};
+        document.addEventListener('visibilitychange',updateWarning);
+        window.addEventListener('pagehide',()=>{statusObserver.disconnect();clearInterval(warningTimer);document.removeEventListener('visibilitychange',updateWarning);},{once:true});
         const foregroundNote = make('p','xxt-foreground-note');
         foregroundNote.textContent = '建议将课程页保持在前台：选中课程标签，不最小化窗口，也不要让电脑休眠。后台运行可能使弹题处理或“继续学习”延迟。';
         const modeLabel = document.createElement('label'), mode = document.createElement('select');
@@ -190,7 +287,7 @@
         routing.onchange=()=>{onAiChange();GM_setValue('xxt-ai-routing',routing.checked);};
         const visionLabel=document.createElement('label'),visionEnabled=document.createElement('input');visionEnabled.type='checkbox';visionEnabled.checked=GM_getValue('xxt-ai-vision-enabled',false);visionEnabled.dataset.setting='vision-enabled';visionLabel.append(visionEnabled,document.createTextNode('图片题使用单独的视觉模型'));
         visionEnabled.onchange=()=>{onAiChange();GM_setValue('xxt-ai-vision-enabled',visionEnabled.checked);updateMode();};
-        const routingNote=document.createElement('p');routingNote.textContent='默认模型处理文字题；未启用独立视觉模型时，图片题仍使用默认模型，须支持图片并开启截图。特殊字体和公式按图片处理。';
+        const routingNote=document.createElement('p');routingNote.textContent='默认模型处理文字题；未启用独立视觉模型时，图片题仍使用默认模型，须支持图片并开启截图。替换字体先尝试还原文字，无法还原的字体和公式才按图片处理。';
         routingLabel.className=visionLabel.className='xxt-route-control';routingNote.className='xxt-route-note';
         const updateMode = () => {
             const enabled = mode.value === 'on';
@@ -200,7 +297,7 @@
             modeNote.textContent = enabled ? '使用自己的模型接口作答，测试与答题可能产生 API 费用。' : '无需 Key，直接开始。处理视频、文献和专题；题目记录后跳过，视频弹题可能导致当前视频未完成。';
         };
         mode.onchange = () => { onAiChange(); GM_setValue('xxt-ai-enabled', mode.value === 'on'); updateMode(); output.textContent = '运行模式已保存，点击“开始自动”继续。'; };
-        modeLabel.append(document.createTextNode('运行模式 '),mode); updateMode();
+        modeLabel.append(document.createTextNode('运行模式 '),mode); document.addEventListener('xxt-profiles-changed',()=>{visionEnabled.checked=GM_getValue('xxt-ai-vision-enabled',false);updateMode();}); updateMode();
         const settings = make('div','xxt-settings'), rateLabel = make('label','xxt-rate-setting'), rate = document.createElement('select'); rate.dataset.setting = 'playback-rate'; rate.setAttribute('aria-label','视频倍速');
         for (const value of XxtCodexCore.playbackRates) { const option = document.createElement('option'); option.value = value; option.textContent = value === 1 ? '1×（建议）' : `${value}×`; rate.append(option); }
         rate.value = playbackRate; rate.onchange = () => onRateChange(Number(rate.value)); rateLabel.append(document.createTextNode('视频倍速'),rate);
@@ -210,6 +307,7 @@
         const quiet = document.createElement('input'); quiet.type = 'checkbox'; quiet.dataset.setting = 'quiet'; quiet.checked = GM_getValue('xxt-quiet-enabled',true);
         quiet.onchange = () => { GM_setValue('xxt-quiet-enabled',quiet.checked); onQuietChange(); };
         const quietLabel = document.createElement('label'); quietLabel.append(quiet,document.createTextNode('23:00—07:00 休息'));
+        const motionLabel=document.createElement('label'),motion=document.createElement('input');motion.type='checkbox';motion.checked=GM_getValue('xxt-ui-motion',true);motion.onchange=()=>GM_setValue('xxt-ui-motion',motion.checked);motionLabel.append(motion,document.createTextNode('测试结果动效'));settings.append(motionLabel);
         const duration = document.createElement('span'); duration.textContent = '文档 60 秒 · 专题每项 90 秒'; settings.append(rateLabel,mutedLabel,duration,quietLabel);
         const feedback = make('footer','xxt-feedback'), feedbackLinks = make('div','xxt-feedback-links');
         for (const [label,template] of [['Bug / 问题反馈','bug_report.yml'],['功能建议','feature_request.yml']]) {
@@ -225,7 +323,7 @@
         const authorNote = document.createElement('div'); authorNote.textContent = '脚本根据作者自己的实际使用需求编写，并持续完善。遇到暂不支持的场景，或有希望增加的功能，欢迎及时反馈；作者会第一时间跟进，评估后补充相应设置和功能。';
         feedbackCopy.append(authorNote,feedbackNote,privacyNote); feedbackDetails.append(feedbackSummary,feedbackCopy);
         feedback.append(feedbackLinks,feedbackDetails);
-        actions.className = 'xxt-actions'; body.append(actions,status,output,foregroundNote,modeLabel,modeNote,routingLabel,routingNote,aiForm,visionLabel,visionForm,settings,details,...(runLog ? [runLog] : []),XxtUpdates.create(),feedback); header.append(name,fold); shell.append(header,picker,body); panel.replaceChildren(shell,mascot);
+        actions.className = 'xxt-actions'; body.append(actions,status,statusCard,foregroundNote,modeLabel,modeNote,routingLabel,routingNote,aiForm,visionLabel,visionForm,profileManager(onAiChange),settings,details,...(runLog ? [runLog] : []),XxtUpdates.create({bannerHost:shell}),feedback); header.append(name,fold); shell.append(header,picker,body); panel.replaceChildren(shell,mascot);
         applySkin(GM_getValue('xxt-ui-skin','default'));
         let drag;
         header.onpointerdown = event => { if (event.button !== 0 || event.target.closest('button')) return; const r = panel.getBoundingClientRect(); drag = {x:event.clientX-r.left,y:event.clientY-r.top}; header.setPointerCapture(event.pointerId); event.preventDefault(); };

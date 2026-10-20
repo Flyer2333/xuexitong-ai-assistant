@@ -1,0 +1,32 @@
+[
+  {
+    "file": "Typr.js",
+    "source": "https://raw.githubusercontent.com/photopea/Typr.js/15aa12ffa6cf39e8788562ea4af65b42317375fb/src/Typr.js",
+    "sha256": "e906fc581293ebb6c005e472f7d5b038ca9c8f6e40927ad450ba90f8b7377971",
+    "license": "MIT"
+  },
+  {
+    "file": "Typr.U.js",
+    "source": "https://raw.githubusercontent.com/photopea/Typr.js/f4fcdeb8014edc75ab7296bd85ac9cde8cb30489/src/Typr.U.js",
+    "sha256": "36f0c3bfd9c11ae6d2336e02e65f10442d6dec134431e9d980f5db508fc96b86",
+    "license": "MIT"
+  },
+  {
+    "file": "md5.js",
+    "source": "https://raw.githubusercontent.com/blueimp/JavaScript-MD5/v2.19.0/js/md5.js",
+    "sha256": "5f14f0efb563db7b23efaf394339a78bced6fd5ba649f049961a65476d928af5",
+    "license": "MIT"
+  },
+  {
+    "file": "Typr-LICENSE.txt",
+    "source": "https://raw.githubusercontent.com/photopea/Typr.js/15aa12ffa6cf39e8788562ea4af65b42317375fb/LICENSE",
+    "sha256": "44b8cdb76bb7adb8fb3ca23a63d4bbf32c2be201bae44106e712094e6cff42a7",
+    "license": "MIT"
+  },
+  {
+    "file": "md5-LICENSE.txt",
+    "source": "https://raw.githubusercontent.com/blueimp/JavaScript-MD5/v2.19.0/LICENSE.txt",
+    "sha256": "ce2ef2581ac80c09ea7025ce0eca7995b1cdc631cd0daaffce3a1353bc2143f8",
+    "license": "MIT"
+  }
+]

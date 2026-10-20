@@ -19,6 +19,7 @@
     const courseParams = new URLSearchParams(location.search);
     const autoKey = `xxt-auto:${location.origin}/${courseParams.get('courseId') || courseParams.get('courseid') || ''}/${courseParams.get('clazzid') || courseParams.get('clazzId') || ''}`;
     let panel, themeStatus, automatic = false, busy = false, stopped = false, task = '', record = {}, inFlight;
+    let apiFailureUntil=0,apiFailureShown=false,apiFailureAutomatic=false;
     const aiEnabled = () => GM_getValue('xxt-ai-enabled', !!GM_getValue('xxt-ai-config', {})?.key);
     const ledgerScope = `${autoKey}/${courseParams.get('cpi') || courseParams.get('personid') || tabId}`;
     const ledgerValid=()=>{const p=new URLSearchParams(location.search);return location.origin===new URL(autoKey.slice('xxt-auto:'.length)).origin &&
@@ -126,6 +127,13 @@
             for (const entry of entries.slice(-20)) { const item = document.createElement('li'); item.textContent = `${entry.status==='reviewed'?'[已复核] ':''}${entry.chapter}：${entry.reason}`; list.append(item); }
         }
         if (coordinator && !coursePage()) post(coordinator, 'status', { task, value });
+    }
+    function showApiFailure(wasAutomatic) {
+        if(apiFailureShown)return;
+        apiFailureShown=true;apiFailureAutomatic=wasAutomatic;
+        // Repeated failures in one automatic run do not extend the countdown.
+        if(apiFailureUntil<=Date.now())apiFailureUntil=Date.now()+60000;
+        themeStatus?.showApiFailure(apiFailureUntil,apiFailureAutomatic);
     }
     function save() { if (task) GM_setValue(`xxt-check:${task}`, record); }
     function setTask(value) {
@@ -527,8 +535,16 @@
     }
     function request(path, payload) {
         if (!aiEnabled()) throw new Error('不接入 AI 模式不会发送模型请求');
+        const requestEpoch=epoch,wasAutomatic=automatic||recovering;
         const job = XxtAi.request(path, payload); inFlight = job;
-        return job.promise.catch(error=>{diagnostics.record(error,{phase:'request'});throw error;});
+        return job.promise.catch(error=>{
+            const category=diagnostics.record(error,{phase:'request'});
+            if(category.code!=='CANCELLED' && requestEpoch===epoch && !unloaded && !quietNow() && aiEnabled()){
+                showApiFailure(wasAutomatic);
+                if(!isTop&&!coursePage())report('ai-call-failed',{task,wasAutomatic});
+            }
+            throw error;
+        });
     }
     function beforeClick() {
         if(retryQueue&&!ledgerValid()){retryQueue=null;stopped=true;automatic=false;throw new Error('课程或账号标识已变化，补做已取消');}
@@ -666,6 +682,7 @@
         if (!aiEnabled()) { pause('不接入 AI：章节题目留待手动作答，记录后继续'); return; }
         busy = true;
         const currentEpoch = epoch;
+        await globalThis.XxtFonts?.prepare(document,()=>{if(stopped||epoch!==currentEpoch)throw Error('已停止');});
         const entries = D.extract(document), questions = entries.map(entry => entry.question);
         const signature = JSON.stringify(questions);
         const assertCurrent = () => {
@@ -1109,6 +1126,7 @@
                 guard();
                 let panel = Q.find(hit.win.document);
                 if (!panel) break;
+                if(aiEnabled())await globalThis.XxtFonts?.prepare(hit.win.document,guard);guard();
                 const entry = Q.extract(panel);
                 // The page may already show a successful answer after refresh, manual submission or a stopped run.
                 const existingFeedback = Q.feedback(panel, entry?.question);
@@ -1384,7 +1402,7 @@
         finally { remotePlayBusy = false; }
     }
     async function start({ recovery = false } = {}) {
-        if (!recovery) { retryQueue=null; recoverySerial++; recovering = false; inFlight?.abort(); XxtAi.cancelImageTest(); videoLines?.reset(); }
+        if (!recovery) { apiFailureShown=false;apiFailureUntil=0;retryQueue=null; recoverySerial++; recovering = false; inFlight?.abort(); XxtAi.cancelImageTest(); videoLines?.reset(); }
         if (isTop && coursePage()) sessionStorage.setItem(autoKey, '1');
         if (quietNow()) { suspendForQuiet(); resumeAfterQuiet = true; notify('已预约：夜间休息中，07:00 后自动开始（北京时间）'); return; }
         stopped = false; automatic = true; navigationRequested = false; documentReportedTask = ''; epoch++;
@@ -1467,7 +1485,7 @@
                     if (action === 'connect') {
                         if (!aiEnabled()) { notify('不接入 AI 模式无需连接测试，点击“开始自动”即可。'); return; }
                         if (busy) throw new Error('请先停止当前任务再测试 AI');
-                        await request('/health'); notify('AI 连接测试通过，点击“开始自动”即可。');
+                        apiFailureShown=false;apiFailureUntil=0;await request('/health'); notify('AI 连接测试通过，点击“开始自动”即可。');
                     }
                 } catch (error) { notify(error.message); }
             });
@@ -1493,6 +1511,7 @@
         themeStatus = XxtAssistantTheme.decorate(panel, { title, actions, output, details, runLog, playbackRate: getPlaybackRate(), onRateChange: changePlaybackRate, muted: getMuted(), onMutedChange: changeMuted,
             onAiChange: () => { stop(); notify('AI 配置已更改，请测试后重新开始自动。'); }, onQuietChange: () => syncQuietHours().catch(error => pause(error.message)) });
         document.body.append(panel); notify(messageValue);
+        if(apiFailureUntil>Date.now())themeStatus.showApiFailure(apiFailureUntil,apiFailureAutomatic);
         if (coordinator && !coursePage()) panel.hidden = true;
     }
     function descendant(root, target, depth = 0) {
@@ -1621,6 +1640,8 @@
                 frames.get(event.source)?.nonce === data.nonce && !completedSenders.has(data.nonce)) {
                 completedSenders.add(data.nonce); pageReviewNeeded = true; advanceCourse(data.reason).catch(error => pause(error.message));
             }
+            if(data.type==='ai-call-failed' && automatic && !stopped && !quietNow() && data.task===courseTask() &&
+                (frames.get(event.source)?.nonce===data.nonce || quizFrames.get(event.source)?.nonce===data.nonce))showApiFailure(data.wasAutomatic===true);
             if (data.type === 'status' && automatic && !stopped && !quietNow() && data.task === courseTask() && !completedSenders.has(data.nonce) &&
                 !(data.value === '正在播放本节视频…' && hasVideoQuiz())) notify(data.value);
         } else if (!isTop && data.target === nonce && chooseCoordinator(event.source)) {

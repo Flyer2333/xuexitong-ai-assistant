@@ -1,16 +1,18 @@
 /* Visible DOM adapters; result text follows the user's screenshots, not a live DOM dump. */
 (() => {
-    const text = el => (el?.textContent || el?.value || '').replace(/\s+/g, ' ').trim();
+    const text = el => (globalThis.XxtFonts?.read(el) || el?.textContent || el?.value || '').replace(/\s+/g, ' ').trim();
     const visible = el => !!(el?.isConnected && el.getClientRects().length && el.ownerDocument.defaultView.getComputedStyle(el).visibility !== 'hidden');
     const enabled = el => visible(el) && !el.disabled && el.getAttribute('aria-disabled') !== 'true' && !el.classList.contains('disabled');
     const buttons = doc => [...doc.querySelectorAll('a,button,[role="button"],input[type="button"],input[type="submit"]')].filter(visible);
     const unique = items => items.length === 1 ? items[0] : null;
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
     const imageSource = img => img.getAttribute('data-original') || img.getAttribute('data-src') || img.currentSrc || img.getAttribute('src') || '';
+    const contentVisuals = (el,selector) => [...(el?.querySelectorAll(selector)||[])].filter(node=>!node.closest('button,[role="button"],[aria-hidden="true"],script,style,.cx-ai-ignore'));
+    const hasRenderedVisual = el => contentVisuals(el,'canvas,svg,math,iframe,.MathJax,.katex').length>0;
     function imageKey(el) {
-        const sources = [...(el?.querySelectorAll('img') || [])].map(img => [imageSource(img), img.getAttribute('src'), img.getAttribute('srcset')]);
-        for (const visual of el?.querySelectorAll('svg,math,.MathJax,.katex') || []) sources.push(['rendered',visual.outerHTML]);
-        for (const canvas of el?.querySelectorAll('canvas') || []) {try{sources.push(['canvas',canvas.toDataURL()]);}catch{sources.push(['unreadable-canvas',String(Date.now())]);}}
+        const sources = contentVisuals(el,'img').map(img => [imageSource(img), img.getAttribute('src'), img.getAttribute('srcset')]);
+        for (const visual of contentVisuals(el,'svg,math,.MathJax,.katex')) sources.push(['rendered',visual.outerHTML]);
+        for (const canvas of contentVisuals(el,'canvas')) {try{sources.push(['canvas',canvas.toDataURL()]);}catch{sources.push(['unreadable-canvas',String(Date.now())]);}}
         if (!sources.length) return undefined;
         let a = 2166136261, b = 3339675911;
         for (const char of JSON.stringify(sources)) { a = Math.imul(a ^ char.charCodeAt(0), 16777619); b = Math.imul(b ^ char.charCodeAt(0), 2246822519); }
@@ -38,8 +40,8 @@
             const choiceClass = el.querySelector('[class*="choice"]')?.className.match(/\bchoice(\d+)\b/);
             return { element: el, rows, fields, question: {
                 id: choiceClass ? `q${choiceClass[1]}` : `q${index + 1}`,
-                type, text: text(el.querySelector('.Zy_TItle')), obfuscated: !!(el.closest('.font-cxsecret') || el.querySelector('.font-cxsecret')),
-                requiresVision: [el.querySelector('.Zy_TItle'),...rows.map(row=>row.querySelector('.after')||row)].some(region=>!!region?.querySelector('canvas,svg,math,iframe,.MathJax,.katex')),
+                type, text: text(el.querySelector('.Zy_TItle')), obfuscated: !!globalThis.XxtFonts?.obfuscated(el),
+                requiresVision: [el.querySelector('.Zy_TItle'),...rows.map(row=>row.querySelector('.after')||row)].some(hasRenderedVisual),
                 ...(isText ? {slots:fields.length} : {}),
                 ...(imageKey(el.querySelector('.Zy_TItle')) ? { imageKey: imageKey(el.querySelector('.Zy_TItle')) } : {}),
                 options: rows.map(row => {
@@ -230,6 +232,6 @@
         const prompt = navigationPrompt(doc);
         return unique(buttons(doc).filter(el => el !== prompt?.next && /^(下一节|下一?小节)$/.test(text(el))));
     };
-    globalThis.XxtCodexDom = { text, visible, enabled, buttons, unique, delay, imageSource, imageKey, extract, readResult, readCorrectAnswers, confirmation, ancestorConfirmation,
+    globalThis.XxtCodexDom = { text, visible, enabled, buttons, unique, delay, imageSource, imageKey, hasRenderedVisual, extract, readResult, readCorrectAnswers, confirmation, ancestorConfirmation,
         navigationPrompt, ancestorNavigationPrompt, selected, applyAnswers, findNext, pageText };
 })();

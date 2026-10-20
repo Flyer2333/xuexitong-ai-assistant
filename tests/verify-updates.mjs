@@ -19,7 +19,7 @@ try {
    Object.defineProperty(navigator,'connection',{configurable:true,get:()=>connection});
    window.GM_openInTab=(...args)=>window.__opened.push(args);
    window.GM_xmlhttpRequest=spec=>{
-    window.__calls.push(spec);const data={version:scenario==='latest'?release.version:scenario==='downgrade'?'1.0.8':'1.0.10',date:'2026-10-18',changes:['仅此新版的变化','<img src=x onerror=alert(1)>']};
+    window.__calls.push(spec);const data={version:scenario==='latest'?release.version:scenario==='downgrade'?'1.0.8':`${Number(release.version.split('.')[0])+1}.0.0`,date:'2026-10-18',changes:['仅此新版的变化','<img src=x onerror=alert(1)>']};
     setTimeout(()=>{if(scenario==='failure')spec.onerror();else spec.onload({status:200,finalUrl:scenario==='changed-origin'?'https://untrusted.invalid/manifest':spec.url,responseText:scenario==='invalid'?'not JSON':JSON.stringify(data)});},30);return {abort(){}};
    };
   },{scenario,release});
@@ -34,7 +34,7 @@ try {
   const install=section.locator('[data-update-install]');
   if(['latest','downgrade','failure','invalid','changed-origin','offline'].includes(scenario))assert.equal(await install.isVisible(),false,scenario);
   else {
-   assert(await install.isVisible());assert.match(await section.locator('[data-update-notes]').textContent(),/1\.0\.10/);
+   assert(await install.isVisible());assert((await section.locator('[data-update-notes]').textContent()).includes(`${Number(release.version.split('.')[0])+1}.0.0`));
    assert.equal(await section.locator('[data-update-notes] img').count(),0,'Remote notes must be text');
    await install.click();assert.equal(await page.evaluate(()=>window.__opened.length),1);
    const url=await page.evaluate(()=>window.__opened[0][0]);assert.equal(url,'https://raw.githubusercontent.com/Flyer2333/xuexitong-ai-assistant/main/dist/xuexitong-ai-assistant.user.js');

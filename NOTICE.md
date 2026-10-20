@@ -17,4 +17,8 @@
 
 可选奶龙和奶蛙主题使用的角色图片另列于 [主题素材说明](assets/themes/README.md)，不属于项目代码许可范围。
 
-1.1.0 的分流、批次、诊断和集中补做设计参考了 [zhu-hailin/chaoxing-ai-assistant](https://github.com/zhu-hailin/chaoxing-ai-assistant/tree/343ee48228f5109b2be7ccddc1449cc8e3842ebd)。审阅时未发现该仓库的项目级许可证，因此本项目独立实现这些设计，没有复制其源码或引入其字体解密依赖。该说明不改变上述既有上游代码的许可边界。
+1.1.0 的分流、批次、诊断和集中补做设计参考了 [zhu-hailin/chaoxing-ai-assistant](https://github.com/zhu-hailin/chaoxing-ai-assistant/tree/343ee48228f5109b2be7ccddc1449cc8e3842ebd)。审阅时未发现该仓库的项目级许可证，因此本项目独立实现这些设计，没有复制其业务源码。1.2.0 为修复替换字体分流，直接从独立上游引入固定版本的 MIT 字体解析依赖，未使用对方打包实现。该说明不改变上述既有上游代码的许可边界。
+
+## 字体解析依赖（1.2.0）
+
+Typr.js、Typr.U.js 直接取自 Photopea 上游固定提交；JavaScript-MD5 取自 blueimp 2.19.0。源码字节与 SHA-256 均记录在 [依赖清单](vendor/font/manifest.json)，对应完整 MIT 许可证保留在同目录并嵌入构建。项目自写字体读取、校验与分流逻辑，不复制参考项目的业务实现。固定字形字典由 forestpolice.org 提供，运行时只读 JSON，不随仓库重分发，网络与缓存范围见[隐私说明](docs/SECURITY.md)。

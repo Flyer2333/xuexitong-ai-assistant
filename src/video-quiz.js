@@ -57,8 +57,8 @@
         if (options.some(option => !option.text)) return null;
         const kind = D.text(panel.querySelector('.tkTopic_title,.ans-videoquiz-type,[data-question-type]')) || D.text(panel);
         const type = controls.some(control => control.type === 'checkbox' || control.getAttribute('role') === 'checkbox') ? 'multiple' : /判断题/.test(kind) ? 'boolean' : 'single';
-        const question = { id: `vq${hash(D.text(title) + JSON.stringify(options))}`, type, text: D.text(title), options, obfuscated: !!(panel.closest('.font-cxsecret') || panel.querySelector('.font-cxsecret')),
-            requiresVision: [title,...rows].some(region=>!!region.querySelector('canvas,svg,math,iframe,.MathJax,.katex')),
+        const question = { id: `vq${hash(D.text(title) + JSON.stringify(options))}`, type, text: D.text(title), options, obfuscated: !!globalThis.XxtFonts?.obfuscated(panel),
+            requiresVision: [title,...rows].some(D.hasRenderedVisual),
             ...(D.imageKey(title) ? {imageKey:D.imageKey(title)} : {}) };
         return { panel, controls, rows, question, signature: JSON.stringify(question) };
     }

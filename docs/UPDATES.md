@@ -54,3 +54,7 @@ https://raw.githubusercontent.com/Flyer2333/xuexitong-ai-assistant/main/dist/xue
 4. 刷新课程页并核对版本。源码 ZIP 不是油猴备份包，不要用备份导入功能安装。
 
 依据：[油猴更新说明](https://www.tampermonkey.net/documentation.php#meta:updateURL)、[WLAN 类型兼容性](https://developer.mozilla.org/en-US/docs/Web/API/NetworkInformation/type)。
+
+## 顶部新版本提醒
+
+检查到比当前安装版本更高的版本后，面板最上方会显示版本号和更新入口；折叠面板主体时仍可看到横幅。点击“查看并更新”打开油猴更新页，仍由你确认安装。点击 × 会关闭这一个版本的顶部提醒；“稍后提醒”延后 6 小时，之后检查时可以再次显示。关闭或延后都不停止课程、不刷新页面，也不影响“脚本更新”中的手动入口。只有启用且浏览器明确识别为 WLAN 时，面板才会自动检查；不能识别网络类型时请手动检查，油猴自身的更新计划另由油猴管理。

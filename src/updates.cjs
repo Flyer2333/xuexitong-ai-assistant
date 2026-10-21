@@ -28,7 +28,8 @@
         const bannerText=document.createElement('strong'),bannerActions=document.createElement('div');bannerText.setAttribute('role','status');
         const bannerInstall=document.createElement('button'),later=document.createElement('button'),close=document.createElement('button');
         bannerInstall.type=later.type=close.type='button';bannerInstall.textContent='查看并更新';later.textContent='稍后提醒';close.textContent='×';close.setAttribute('aria-label','关闭本版本更新提示');close.className='xxt-update-close';
-        bannerActions.append(bannerInstall,later);banner.append(bannerText,bannerActions,close);bannerHost?.prepend(banner);
+        const waitHint=document.createElement('small');waitHint.dataset.updateWaitHint='true';waitHint.textContent='点击后油猴会加载更新；中转页可能停留约 1 分钟或更久，请保留页面，等待安装/更新确认窗口。';
+        bannerActions.append(bannerInstall,later);banner.append(bannerText,bannerActions,waitHint,close);bannerHost?.prepend(banner);
         let available=null;
         const showBanner=()=>{banner.hidden=!available||GM_getValue('xxt-update-dismissed','')===available.version||Number(GM_getValue('xxt-update-snooze-until',0))>Date.now();};
         close.onclick=()=>{if(available)GM_setValue('xxt-update-dismissed',available.version);showBanner();};
@@ -74,7 +75,7 @@
                 else {available=null;showBanner();status.textContent=compare(data.version,release.version)<0?'已安装版本高于当前发布版本，无需降级。':`当前已是最新版本 ${release.version}。`;showNotes(release);}
             }catch(error){status.textContent=error.message;}finally{busy=false;check.disabled=false;}
         }
-        install.onclick=()=>{try{GM_openInTab(installUrl,{active:true,insert:true});status.textContent='已打开更新页，请在油猴确认更新；完成后刷新课程页。若没有出现更新页，请展开“更新方法（油猴）”。';instructions.open=true;}catch{status.textContent='无法打开更新页，请按下方步骤在油猴管理面板检查更新。';instructions.open=true;}};
+        install.onclick=()=>{status.textContent='油猴正在加载更新，可能需要约 1 分钟或更久。看到 Script Installation 中转页时请保留页面等待，不必复制代码或反复点击。出现确认窗口后点击“更新”，再刷新课程页；若等待数分钟仍未出现，请按下方“更新方法（油猴）”检查更新或手动替换。';instructions.open=true;try{GM_openInTab(installUrl,{active:true,insert:true});}catch{status.textContent='无法打开更新页，请按下方步骤在油猴管理面板检查更新。';}};
         bannerInstall.onclick=()=>{section.open=true;install.click();};
         check.onclick=()=>checkUpdate(true);
         auto.onchange=()=>{GM_setValue('xxt-update-wifi',auto.checked);networkNote.textContent=network(navigator).message;if(auto.checked)void checkUpdate();};

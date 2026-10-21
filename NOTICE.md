@@ -25,4 +25,4 @@ Typr.js、Typr.U.js 直接取自 Photopea 上游固定提交；JavaScript-MD5 �
 
 ## AI 角色和品牌图标（1.3.0）
 
-角色为参考用户指定形象后生成的界面素材，来源、生成记录和适用说明见 [角色图鉴](docs/THEMES.md) 与 assets/personas。模型品牌图标来自 LobeHub/lobe-icons，MIT 完整许可见 assets/model-icons/LICENSE.txt，固定提交和文件哈希见 manifest.json。品牌及原角色权利仍归各权利人，不代表官方合作。
+原角色设计作者为 B 站 UP 主 [ZipZipPipe](https://space.bilibili.com/4168597)。角色为参考其形象后生成的界面素材，来源、生成记录和适用说明见 [角色图鉴](docs/THEMES.md) 与 assets/personas。模型品牌图标来自 LobeHub/lobe-icons，MIT 完整许可见 assets/model-icons/LICENSE.txt，固定提交和文件哈希见 manifest.json。品牌及原角色权利仍归各权利人，不代表官方合作。

@@ -49,7 +49,7 @@
     function testResult(button,result){
         const panel=button.closest('[data-xxt-codex-panel]'),dialog=document.createElement('dialog');dialog.className='xxt-test-result';
         const success=result.success;dialog.dataset.imageTestResult=success?'success':'failure';dialog.setAttribute('aria-label','接口测试结果');
-        const title=document.createElement('h3'),scope=document.createElement('p'),close=document.createElement('button'),cast=document.createElement('div'),dismiss=document.createElement('button');cast.className='xxt-result-cast';title.textContent=success?'连接成功，可以开始了！':'本次测试有未通过的接口';dismiss.className='xxt-result-dismiss';dismiss.textContent='×';dismiss.setAttribute('aria-label','关闭测试结果');dismiss.onclick=()=>dialog.close();dialog.append(dismiss,title,cast);
+        const title=document.createElement('h3'),close=document.createElement('button'),cast=document.createElement('div'),dismiss=document.createElement('button');cast.className='xxt-result-cast';title.textContent=success?'连接成功，可以开始了！':'本次测试有未通过的接口';dismiss.className='xxt-result-dismiss';dismiss.textContent='×';dismiss.setAttribute('aria-label','关闭测试结果');dismiss.onclick=()=>dialog.close();dialog.append(dismiss,title,cast);
         for(const r of result.results){
             const row=document.createElement('section'),art=document.createElement('div'),info=document.createElement('div'),label=document.createElement('strong'),description=document.createElement('p');row.className='xxt-result-row';row.dataset.testRole=r.role;row.dataset.result=r.success?'success':'failure';art.className='xxt-result-art';
             const character=figure(r.character,r.success?2:3);if(character)art.append(character);else art.textContent=r.success?'✓':'!';
@@ -59,7 +59,7 @@
             if(!r.success&&!r.certain){const possible=document.createElement('small');possible.textContent='以上为可能原因，尚未确定唯一原因。';info.append(possible);}
             info.prepend(label,model,description);row.append(art,info);cast.append(row);
         }
-        scope.className='xxt-result-scope';scope.textContent='测试只验证本次连接或测试图片，不保证实际题目全对。';close.type='button';close.textContent='知道了';close.autofocus=true;close.onclick=()=>dialog.close();dialog.addEventListener('close',()=>{dialog.remove();button.focus();},{once:true});dialog.append(scope,close);panel.append(dialog);dialog.showModal();
+        close.type='button';close.textContent='知道了';close.autofocus=true;close.onclick=()=>dialog.close();dialog.addEventListener('close',()=>{dialog.remove();button.focus();},{once:true});dialog.append(close);panel.append(dialog);dialog.showModal();
         if(!matchMedia('(prefers-reduced-motion: reduce)').matches){dialog.animate([{opacity:0},{opacity:1}],{duration:200,easing:'cubic-bezier(0.23,1,0.32,1)'});for(const art of dialog.querySelectorAll('.xxt-result-art'))art.animate(art.closest('[data-result]').dataset.result==='success'?[{opacity:0,transform:'translateY(12px) scale(.92) rotate(-3deg)'},{opacity:1,transform:'translateY(-4px) scale(1.02) rotate(2deg)'},{opacity:1,transform:'translateY(0) scale(1) rotate(0)'}]:[{opacity:0,transform:'translateY(8px) scale(.95)'},{opacity:1,transform:'translateX(-4px) scale(1)'},{opacity:1,transform:'translateX(4px) scale(1)'},{opacity:1,transform:'translateX(0) scale(1)'}],{duration:280,easing:'cubic-bezier(0.23,1,0.32,1)'});}
     }
     function aiSettings(onChange, storageKey = 'xxt-ai-config') {
@@ -82,10 +82,13 @@
         field('model','手动填写模型 ID'); fields.model.autocomplete = 'off'; fields.model.spellcheck = false;
         const catalogNote = document.createElement('small'); catalogNote.dataset.aiCatalogNote = 'true'; form.append(catalogNote);
         field('key','API Key / 本地连接码'); fields.key.type = 'password'; fields.key.autocomplete = 'off';
+        const keyHelp=document.createElement('small');keyHelp.dataset.aiKeyHelp='true';fields.key.closest('label').after(keyHelp);
+        function updateKeyHelp(){const local=fields.protocol.value==='codex';fields.key.placeholder=local?'请输入本地服务生成的连接码':'请输入该服务商的 API Key';keyHelp.textContent=local?'先在解压后的项目目录运行 npm run start:codex，打开生成的 src/local/bridge-token.txt，将完整连接码填到这里；服务需保持运行。无需另填 OpenAI API Key。':'';keyHelp.hidden=!local;}
         field('maxTokens','最大输出 token'); fields.maxTokens.type = 'number'; fields.maxTokens.min = '256'; fields.maxTokens.max = '32768';
         field('reasoning','推理设置（按当前模型适配）',[]);
         const reasoningNote = document.createElement('small'); reasoningNote.dataset.aiReasoningNote = 'true'; form.append(reasoningNote);
         function updateReasoning(preferred = fields.reasoning.value) {
+            updateKeyHelp();
             const c = {provider:fields.provider.value,protocol:fields.protocol.value,model:fields.model.value.trim()};
             const options = A.catalog.reasoningOptions(c); fields.reasoning.replaceChildren();
             for (const [value,text] of options) { const option = document.createElement('option'); option.value = value; option.textContent = text; fields.reasoning.append(option); }
@@ -112,7 +115,7 @@
             if (item?.vision !== null && item?.vision !== undefined) fields.vision.checked = item.vision;
             updateReasoning(''); if (manual) fields.model.focus();
         };
-        fields.model.oninput = () => updateReasoning(); fields.protocol.onchange = () => updateReasoning('');
+        fields.model.oninput = () => updateReasoning(); fields.protocol.onchange = () => {updateReasoning('');updateKeyHelp();};
         for (const [key,label] of [['vision','图片能力'],['jsonMode','发送 JSON 模式参数（须接口支持）']]) { field(key,label); fields[key].type = 'checkbox'; }
         fields.vision.closest('label').hidden=true;
         field('purpose','这个接口用于',[['text','文字题'],['image','图片题'],['both','文字题＋图片题'],['none','仅保存，暂不使用']]);
@@ -190,7 +193,6 @@
         for(const [id,[label]]of Object.entries(skins)){const b=document.createElement('button');b.type='button';b.textContent=label;b.dataset.skinChoice=id;b.onclick=()=>{preference=preference===id?'default':id;persist();};picker.append(b);}
         document.addEventListener('xxt-connection-changed',applySkin);document.addEventListener('xxt-profiles-changed',applySkin);const themeTimer=setInterval(applySkin,5000);window.addEventListener('pagehide',()=>clearInterval(themeTimer),{once:true});
         const body = make('div','xxt-body'), fold = make('button','xxt-fold'); fold.textContent = '−'; fold.title = '收起面板';
-        const portraitSpace=make('div','xxt-portrait-space');portraitSpace.setAttribute('aria-hidden','true');
         fold.onclick = () => { body.hidden = !body.hidden; fold.textContent = body.hidden ? '+' : '−'; fold.title = body.hidden ? '展开面板' : '收起面板'; };
         const status = make('div','xxt-state'); status.textContent = '学习流程 · 多模型接入';
         const statusCard=make('section','xxt-status-card');statusCard.dataset.status='idle';statusCard.setAttribute('aria-label','运行状态');
@@ -270,7 +272,7 @@
         feedbackCopy.append(authorNote,feedbackNote,privacyNote); feedbackDetails.append(feedbackSummary,feedbackCopy);
         feedback.append(feedbackLinks,feedbackDetails);
         const support=document.createElement('a');support.textContent='♥ 支持作者';support.href='https://github.com/Flyer2333/xuexitong-ai-assistant/blob/main/docs/SUPPORT.md';support.target='_blank';support.rel='noopener noreferrer';feedbackLinks.append(support);
-        actions.className = 'xxt-actions'; body.append(portraitSpace,actions,status,statusCard,foregroundNote,modeLabel,modeNote,selectedSummary,routingNote,aiForm,profileManager(onAiChange),settings,details,...(runLog ? [runLog] : []),XxtUpdates.create({bannerHost:shell}),feedback); header.append(name); shell.append(scene,header,picker,themeFeedback,body); panel.replaceChildren(shell,mascot,fold);
+        actions.className = 'xxt-actions'; body.append(actions,status,statusCard,foregroundNote,modeLabel,modeNote,selectedSummary,routingNote,aiForm,profileManager(onAiChange),settings,details,...(runLog ? [runLog] : []),XxtUpdates.create({bannerHost:shell}),feedback); header.append(name); shell.append(scene,header,picker,themeFeedback,body); panel.replaceChildren(shell,mascot,fold);
         const scenePosition=new ResizeObserver(()=>{shell.style.setProperty('--xxt-scene-top',body.offsetTop+'px');fold.style.top=(header.offsetTop+18)+'px';});scenePosition.observe(body);window.addEventListener('pagehide',()=>scenePosition.disconnect(),{once:true});
         applySkin();
         let drag;

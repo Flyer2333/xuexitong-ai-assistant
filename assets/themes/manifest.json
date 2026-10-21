@@ -5,13 +5,17 @@
     "mime": "image/png",
     "source": "https://www.nailoong.com/_ipx/q_85/img/business/nl_base_3d.png",
     "page": "https://www.nailoong.com/business/ipIncubation/",
-    "sha256": "e7efd32883b7319f1af0f08af4ffc6cba96e5a5955c6524a2649fa8fb5adbb5c"
+    "sha256": "72062899ee3c46390af4a36d4fbc86d700febf0a014768c1ec39693d7083a390",
+    "edit": "内置 imagegen 清除描边和背景残留，透明 PNG；关闭 UI 外部投影。",
+    "processing": "2026-10-21 内置 imagegen 清除白色描边与灰色边缘；透明 PNG，外部阴影关闭"
   },
   {
     "id": "naiwa",
     "file": "assets/themes/naiwa.png",
     "mime": "image/png",
     "source": "用户提供的奶蛙形象，经内置 imagegen 去除背景",
-    "sha256": "bae5cb30b3748f482c14e90641f95c411520662c497bc6515ed38b192bcee64f"
+    "sha256": "b58d17e1c80b96b3203b43eda96574ee1f1f1d6bc9b37606fda78a4c12939db3",
+    "edit": "内置 imagegen 清除描边和背景残留，透明 PNG；关闭 UI 外部投影。",
+    "processing": "2026-10-21 内置 imagegen 清除白色描边与灰色边缘；透明 PNG，外部阴影关闭"
   }
 ]

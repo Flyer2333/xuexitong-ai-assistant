@@ -53,7 +53,12 @@
         return validateAnswers(questions, result, { allowUncertain: true }).map(answer => {
             if (!randomizeUncertain || (answer.readable && answer.confidence >= 0.8)) return answer;
             const q = questions.find(item => item.id === answer.id);
-            if (textQuestion(q)) throw new Error('文本题答案不确定，保留原输入，不随机填写');
+            if (textQuestion(q)) {
+                if (!answer.readable) throw new Error(`填空/简答题 ${q.id} 被模型标记为无法读清，保留原输入`);
+                // A complete model candidate is a first attempt, not a random string.
+                // Let platform scoring and the existing reference-answer retry judge it.
+                return {...answer,lowConfidence:true};
+            }
             const keys = q.options.map(option => option.key);
             const pick = () => keys[Math.min(keys.length - 1, Math.max(0, Math.floor(random() * keys.length)))];
             const choices = q.type === 'multiple' ? keys.filter(() => random() < 0.5) : [pick()];

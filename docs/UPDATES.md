@@ -46,6 +46,16 @@ https://raw.githubusercontent.com/Flyer2333/xuexitong-ai-assistant/main/dist/xue
 
 升级并刷新课程页后，更新区自动展开当前安装版本的本次更新说明。点击 **知道了** 后收起，同一版本不再自动展开，仍可手动查看。这里不拼接历史版本；发现新版本时展示候选版本说明。完整历史保留在 [CHANGELOG](../CHANGELOG.md) 和 README 更新时间表。
 
+## 更新中转页需要等待
+
+点击更新按钮后，油猴可能先显示 Script Installation 中转页，再弹出更新确认窗口。请保留中转页，等待约 1 分钟；网络较慢时可能更久。这个页面暂时不变，不代表已经更新完成，也不需要立即复制粘贴代码。出现油猴确认窗口后点击“更新”，再刷新课程并核对版本号。
+
+| ① 点击更新 | ② 等待油猴加载 | ③ 确认更新 |
+| :---: | :---: | :---: |
+| [![点击更新按钮](getting-started/update-step-1.png)](getting-started/update-step-1.png) | [![保留中转页等待](getting-started/update-step-2.png)](getting-started/update-step-2.png) | [![油猴确认更新](getting-started/update-step-3.png)](getting-started/update-step-3.png) |
+
+截图版本仅作流程示例，点击可放大。数分钟仍无确认窗口时，再使用下面的备用方式。
+
 ## 更新页打不开或卡在中转页
 
 1. 打开 [仓库](https://github.com/Flyer2333/xuexitong-ai-assistant)，点击 **Code → Download ZIP** 并解压。

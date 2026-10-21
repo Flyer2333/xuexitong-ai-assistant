@@ -36,7 +36,7 @@ try {
   else {
    assert(await install.isVisible());assert((await section.locator('[data-update-notes]').textContent()).includes(`${Number(release.version.split('.')[0])+1}.0.0`));
    assert.equal(await section.locator('[data-update-notes] img').count(),0,'Remote notes must be text');
-   await install.click();assert.equal(await page.evaluate(()=>window.__opened.length),1);
+   assert.match(await page.locator('[data-update-wait-hint]').textContent(),/1 分钟/);await install.click();assert.match(await status.textContent(),/保留页面等待/);assert.match(await status.textContent(),/确认窗口/);assert.equal(await page.evaluate(()=>window.__opened.length),1);
    const url=await page.evaluate(()=>window.__opened[0][0]);assert.equal(url,'https://raw.githubusercontent.com/Flyer2333/xuexitong-ai-assistant/main/dist/xuexitong-ai-assistant.user.js');
   }
   if(scenario==='wifi') {

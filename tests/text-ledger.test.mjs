@@ -5,11 +5,19 @@ const answer={id:'q1',texts:['甲','乙'],choices:[],readable:true,confidence:1,
 test('text answers require exact slot mapping, nonempty values and confidence; never randomize text',()=>{
  assert.deepEqual(C.resolveAnswers([q],{answers:[answer]})[0].texts,['甲','乙']);
  assert.throws(()=>C.resolveAnswers([q],{answers:[{...answer,texts:['甲']}]}),/数量/);
- assert.throws(()=>C.resolveAnswers([q],{answers:[{...answer,confidence:0.1}]},{randomizeUncertain:true}),/不随机/);
+ const low=C.resolveAnswers([q],{answers:[{...answer,confidence:0.1}]},{randomizeUncertain:true})[0];
+ assert.deepEqual(low.texts,answer.texts);assert.equal(low.lowConfidence,true);assert(!low.randomized);
+ assert.throws(()=>C.resolveAnswers([q],{answers:[{...answer,readable:false}]},{randomizeUncertain:true}),/无法读清/);
  assert.deepEqual(C.recallAnswers([q],[{question:q,texts:['甲','乙']}])[0].texts,['甲','乙']);
  assert.equal(R.novel([q],[answer],[[answer]]).exhausted,true);
  const plan=R.plan([q],[{questions:[q],answers:[answer],finalScore:0,maxScore:10}]);assert(plan.repeated([answer]));
  assert(!plan.repeated([{...answer,texts:['丙','丁']}]));
+});
+test('a low-confidence complete blank does not block eleven objective answers',()=>{
+ const objective=Array.from({length:11},(_,i)=>({id:'choice'+i,type:'single',text:'题干',options:[{key:'A',text:'甲'},{key:'B',text:'乙'}]}));
+ const answers=objective.map(x=>({id:x.id,choices:['A'],readable:true,confidence:1,explanation:''}));
+ const result=C.resolveAnswers([...objective,q],{answers:[...answers,{...answer,confidence:0.5}]},{randomizeUncertain:true});
+ assert.equal(result.length,12);assert.deepEqual(result.at(-1).texts,['甲','乙']);assert(result.slice(0,11).every(a=>a.choices[0]==='A'));
 });
 test('central retry is scoped, bounded and excludes uncertain submission, changed catalog and legacy records',()=>{
  const scope='course-class-account',catalog=[{index:0,title:'甲'},{index:1,title:'乙'}];

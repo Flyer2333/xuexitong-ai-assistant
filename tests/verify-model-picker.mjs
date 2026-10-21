@@ -30,7 +30,7 @@ try {
  await reasoning.selectOption('max'); await settings.locator('[data-ai-field=key]').fill('fixture-key'); await settings.locator('[data-ai-save]').click();
  assert.equal(await picker.inputValue(),'deepseek-flash'); assert.equal(await manual.isVisible(),false); assert.equal(await reasoning.inputValue(),'max');
  await page.locator('[data-action=connect]').click(); await page.waitForFunction(()=>document.querySelector('pre').textContent.includes('连接测试通过'));
- assert.equal(await page.evaluate(()=>window.__requests[0].reasoning_effort),'max');
+ assert.equal(await page.evaluate(()=>window.__requests[0].reasoning_effort),'max');await page.getByRole('dialog').getByText('知道了',{exact:true}).click();
  await picker.selectOption('__manual__'); assert(await manual.isVisible()); await manual.fill('my-account-model');
  assert.equal(await reasoning.isDisabled(),true); assert.equal(await reasoning.inputValue(),'');
  await settings.locator('[data-ai-save]').click(); assert.equal(await picker.inputValue(),'__manual__');
@@ -42,11 +42,11 @@ try {
  await picker.selectOption('kimi-k2.7-code'); assert(await reasoning.isDisabled());
  await provider.selectOption('doubao'); await picker.selectOption('doubao-seed-2-1-pro-260915');
  await reasoning.selectOption('max'); await settings.locator('[data-ai-field=key]').fill('fixture-key'); await settings.locator('[data-ai-save]').click(); await page.locator('[data-action=connect]').click();
- await page.waitForFunction(()=>window.__requests.length===1); assert.equal(await page.evaluate(()=>window.__requests[0].reasoning_effort),'max');
+ await page.waitForFunction(()=>window.__requests.length===1); assert.equal(await page.evaluate(()=>window.__requests[0].reasoning_effort),'max');await page.getByRole('dialog').getByText('知道了',{exact:true}).click();
  await picker.selectOption('glm-5-3-flash-260828'); assert.equal(await reasoning.inputValue(),''); assert.equal(await reasoning.locator('option[value=none]').count(),0);
  await provider.selectOption('qwen'); await picker.selectOption('qwen3.8-omni-flash'); await reasoning.selectOption('minimal'); await settings.locator('[data-ai-field=key]').fill('fixture-key');
  await settings.locator('[data-ai-save]').click(); await page.locator('[data-action=connect]').click(); await page.waitForFunction(()=>window.__requests.length===2);
- assert.equal(await page.evaluate(()=>window.__requests[1].reasoning_effort),'minimal');
+ assert.equal(await page.evaluate(()=>window.__requests[1].reasoning_effort),'minimal');await page.getByRole('dialog').getByText('知道了',{exact:true}).click();
  await picker.selectOption('xiaomi/mimo-v2.6-pro-ultraspeed'); assert.equal(await reasoning.inputValue(),''); assert(await reasoning.isDisabled());
  await provider.selectOption('claude'); await picker.selectOption('claude-opus-5-5'); assert(await reasoning.locator('option[value=xhigh]').count());
  await settings.locator('[data-ai-field=protocol]').selectOption('chat'); assert(await reasoning.isDisabled());

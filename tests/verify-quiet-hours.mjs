@@ -98,9 +98,9 @@ try {
     await page.close();
 
     page = await openPage({ time: Date.parse('2026-10-13T04:00:00Z') });
-    await page.locator('[data-action="connect"]').click();
+    await page.evaluate(()=>GM_setValue('xxt-ai-vision-enabled',false));await page.locator('[data-action="connect"]').click();
     await page.waitForFunction(() => /AI 连接测试通过/.test(document.querySelector('[data-xxt-codex-panel] pre').textContent));
-    const rect = await page.locator('[data-xxt-codex-panel]').boundingBox();
+    await page.getByRole('dialog').getByText('知道了',{exact:true}).click();const rect = await page.locator('[data-xxt-codex-panel]').boundingBox();
     await page.screenshot({ path: resolve(temp, 'quiet-ui.png'), clip: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
     assert.equal(await page.locator('[data-xxt-codex-panel]').getAttribute('data-skin'), 'default');
     assert.equal(await page.locator('[data-setting="quiet"]').isChecked(), true);

@@ -1,4 +1,6 @@
 node_modules/
+output/
+.playwright-cli/
 TASK_PROGRESS.md
 src/local/
 local/

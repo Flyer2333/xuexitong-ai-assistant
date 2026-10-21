@@ -1,0 +1,36 @@
+import {readFile,mkdir,writeFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
+import assert from 'node:assert/strict';
+import {chromium} from './browser-runtime.mjs';
+const root=resolve(import.meta.dirname,'..'),out=resolve(root,'artifacts/glass-1.3.0');await mkdir(out,{recursive:true});
+const html=(await readFile(resolve(root,'tests/ui-preview.html'),'utf8')).replace('<script src="/dist/xuexitong-ai-assistant.user.js"></script>','');
+const bundle=await readFile(resolve(root,'dist/xuexitong-ai-assistant.user.js'),'utf8');
+const browser=await chromium.launch({channel:'chrome',headless:true});const observations=[];
+async function open(data='demo',brand='deepseek',width=1100,height=1000){const p=await browser.newPage({viewport:{width,height}});await p.route('**/*',r=>r.fulfill({contentType:'text/html; charset=utf-8',body:html}));await p.goto(`https://mooc1.chaoxing.com/mycourse/studentstudy?data=${data}&brand=${brand}`);await p.addScriptTag({content:bundle});return p;}
+async function bounds(p,label){const b=await p.evaluate(()=>{const panel=document.querySelector('[data-xxt-codex-panel]'),body=panel.querySelector('.xxt-body'),s=panel.querySelector('.xxt-shell').getBoundingClientRect();return{left:s.left,right:s.right,top:s.top,bottom:s.bottom,width:innerWidth,height:innerHeight,overflow:body.scrollWidth-body.clientWidth,scroll:body.scrollHeight>body.clientHeight};});assert(b.left>=0&&b.right<=b.width+1,`${label}: panel outside viewport ${JSON.stringify(b)}`);assert(b.bottom<=b.height+1,`${label}: clipped vertical viewport`);assert(b.overflow<=1,`${label}: horizontal overflow`);observations.push({label,...b});}
+try{
+ const p=await open();const panel=p.locator('[data-xxt-codex-panel]');
+ assert.equal(await panel.locator('.xxt-head strong').textContent(),'DeepSeek·学习助手');assert.equal(await panel.locator('.xxt-brand img').count(),1);
+ assert.equal(await p.locator('[data-setting=vision-enabled],[data-setting=ai-routing],[data-setting=test-motion]').count(),0);
+ await p.locator('[data-saved-profiles] summary').click();
+ const role=(id,kind)=>p.locator(`[data-profile-id="fixture-${id}"][data-purpose=${kind}]`);
+ assert.equal(await role(1,'text').getAttribute('aria-pressed'),'true');await role(2,'image').click();assert.equal(await role(2,'image').getAttribute('aria-pressed'),'true');
+ await role(2,'text').click();assert.equal(await role(1,'text').getAttribute('aria-pressed'),'false');assert.equal(await role(2,'text').getAttribute('aria-pressed'),'true');assert.equal(await role(2,'image').getAttribute('aria-pressed'),'true');
+ await role(1,'image').click();assert.equal(await role(2,'image').getAttribute('aria-pressed'),'false');assert.equal(await role(2,'text').getAttribute('aria-pressed'),'true');
+ await role(1,'text').click();await p.locator('[data-action=connect]').click();await p.getByRole('dialog').waitFor();assert.equal(await p.locator('[data-test-role]').count(),2);assert.equal(await p.locator('[data-result=failure]').count(),0);assert.equal(await panel.getAttribute('data-skin'),'ai-deepseek');await p.getByRole('dialog').getByRole('button',{name:'知道了',exact:true}).click();
+ await panel.locator('[role=switch]').click();assert.equal(await panel.getAttribute('data-skin'),'default');await panel.locator('[role=switch]').click();assert.equal(await panel.getAttribute('data-skin'),'ai-deepseek');
+ await p.locator('[data-skin-choice=nailoong]').click();assert.equal(await p.locator('[data-skin-choice=nailoong]').getAttribute('aria-pressed'),'true');await p.locator('[data-skin-choice=nailoong]').click();assert.equal(await panel.getAttribute('data-skin'),'default');
+ // A nonvisual catalog model requires an explicit confirmation, with Escape retaining the old assignment.
+ await p.evaluate(()=>{const c={...__gm['xxt-ai-config'],model:'deepseek-v4-pro',key:'fixture-key-nonvisual'};__gm['xxt-ai-profiles'].push({id:'nonvisual',config:c,createdAt:Date.now()});document.dispatchEvent(new Event('xxt-profiles-changed'));});
+ const nv=p.locator('[data-profile-id=nonvisual][data-purpose=image]');await nv.click();await p.getByRole('dialog',{name:'确认图片用途'}).waitFor();await p.keyboard.press('Escape');assert.equal(await nv.getAttribute('aria-pressed'),'false');await nv.click();await p.getByRole('button',{name:'仍用于图片',exact:true}).click();assert.equal(await nv.getAttribute('aria-pressed'),'true');assert.equal(await role(1,'image').getAttribute('aria-pressed'),'false');
+ await role(1,'image').click();await p.evaluate(()=>window.__wrong=true);await p.locator('[data-action=connect]').click();await p.getByRole('dialog').waitFor();assert.equal(await p.locator('[data-test-role="图片"][data-result=failure]').count(),1);assert.match(await p.getByRole('dialog').textContent(),/图片识别未通过/);await p.keyboard.press('Escape');
+ await p.evaluate(()=>{window.__wrong=false;window.__fail=true;});await p.locator('[data-action=connect]').click();await p.getByRole('dialog').waitFor();assert.match(await p.getByRole('dialog').textContent(),/模型 ID 不存在或不可用/);assert(!(await p.getByRole('dialog').textContent()).includes('fixture'));await p.keyboard.press('Escape');
+ assert(await p.locator('[data-purpose-feedback]').textContent());await p.close();
+ for(const data of ['demo','worst','empty','one','30'])for(const width of [320,1100,1920]){
+  const p=await open(data,'deepseek',width,950);await p.locator('[data-saved-profiles] summary').click();await bounds(p,`${data}-${width}`);if(width===320&&['demo','worst'].includes(data))await p.screenshot({path:resolve(out,`${data}-320.png`)});await p.close();
+ }
+ const zoom=await open('worst','deepseek',550,475);await zoom.locator('[data-saved-profiles] summary').click();await zoom.evaluate(()=>document.documentElement.style.fontSize='200%');await bounds(zoom,'200-percent-equivalent-viewport');await zoom.screenshot({path:resolve(out,'worst-zoom.png')});await zoom.close();
+ for(const brand of ['deepseek','openai','claude','gemini','zhipu','kimi','qwen','doubao','xiaomi']){const p=await open('one',brand);await p.emulateMedia({reducedMotion:'reduce',colorScheme:'dark'});await p.locator('[data-action=connect]').click();await p.getByRole('dialog').waitFor();await p.keyboard.press('Escape');assert.equal(await p.locator('[data-xxt-codex-panel]').getAttribute('data-skin'),'ai-'+brand);assert.equal(await p.locator('.xxt-brand img').count(),1);assert.equal(await p.locator('.xxt-theme-mascot svg clipPath').count(),1);const mascot=await p.locator('.xxt-theme-mascot').boundingBox();assert(mascot.height>=160);if(['deepseek','openai','claude'].includes(brand)){const b=await p.locator('[data-xxt-codex-panel]').boundingBox();await p.screenshot({path:resolve(out,brand+'.png'),clip:{x:b.x,y:Math.max(0,b.y-136),width:b.width,height:Math.min(1000-Math.max(0,b.y-136),b.height+136)}});}await p.close();}
+ await writeFile(resolve(out,'observations.json'),JSON.stringify({scope:'Synthetic GM transport; no real API, credentials or course submissions',observations},null,2));console.log('Glass UI: unique/dual roles, nonvisual confirmation, test success/failure, exclusive skins, nine brands, 15 layout datasets and 200% equivalent viewport passed.');
+}finally{await browser.close();}
+

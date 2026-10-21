@@ -21,8 +21,19 @@
   }
   function clear(config){for(const p of list())if(identity(p.config)===identity(config))remove(p.id);for(const slot of slots){const c=get(slot,{});if(identity(c)===identity(config))set(slot,{...c,key:''});}}
   function markUsed(config){const rows=list();if(rows.some(p=>identity(p.config)===identity(config)))set(store,rows.map(p=>identity(p.config)===identity(config)?{...p,lastUsedAt:now()}:p));}
-  function migrate(){for(const slot of slots){const c=get(slot,{});if(c?.key&&!list().some(p=>identity(p.config)===identity(c)))save(c);}}
-  return {list,save,remove,clear,markUsed,migrate};
+  function selected(config,kind){const c=get(slots[kind==='image'?1:0],{});return !!c.key&&identity(c)===identity(config)&&(kind!=='image'||get('xxt-ai-vision-enabled',false));}
+  function assign(config,kind,enabled=true){
+   const slot=slots[kind==='image'?1:0];
+   if(enabled){set(slot,{...pick(config),vision:kind==='image'});if(kind==='image')set('xxt-ai-vision-enabled',true);}
+   else if(selected(config,kind)){set(slot,{...get(slot,{}),key:''});if(kind==='image')set('xxt-ai-vision-enabled',false);}
+  }
+  function migrate(){for(const slot of slots){const c=get(slot,{});if(c?.key&&!list().some(p=>identity(p.config)===identity(c)))save(c);}
+   if(!get('xxt-purpose-schema',false)){
+    const c=get(slots[0],{});if(c.key&&c.vision&&!get('xxt-ai-vision-enabled',false))assign(c,'image');
+    set('xxt-ai-routing',true);set('xxt-purpose-schema',true);
+   }
+  }
+  return {list,save,remove,clear,markUsed,migrate,selected,assign};
  }
  const api={create,mask,identity};
  if(typeof module==='object'&&module.exports)module.exports=api;

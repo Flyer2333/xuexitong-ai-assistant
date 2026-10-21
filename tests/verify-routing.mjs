@@ -24,12 +24,12 @@ try {
  for(const [field,value] of Object.entries({provider:'custom',baseUrl:'https://text.example.invalid/v1',model:'text-model',key:'text-key'})){
   const input=main.locator(`[data-ai-field=${field}]`);if(field==='provider')await input.selectOption(value);else await input.fill(value);
  }
- await main.locator('[data-ai-field=vision]').uncheck();await main.locator('[data-ai-save]').click();
- await page.locator('[data-setting=vision-enabled]').check();const vision=page.locator('[data-vision-settings]');await vision.locator('summary').click();
+ await main.locator('[data-ai-field=purpose]').selectOption('text');await main.locator('[data-ai-save]').click();
+ const vision=main;await main.locator('[data-ai-field=purpose]').selectOption('image');
  for(const [field,value] of Object.entries({provider:'custom',baseUrl:'https://vision.example.invalid/v1',model:'vision-model',key:'vision-key'})){
-  const input=vision.locator(`[data-vision-field=${field}]`);if(field==='provider')await input.selectOption(value);else await input.fill(value);
+  const input=vision.locator(`[data-ai-field=${field}]`);if(field==='provider')await input.selectOption(value);else await input.fill(value);
  }
- await vision.locator('[data-vision-save]').click();
+ await vision.locator('[data-ai-save]').click();
  await page.evaluate(async()=>{
   const q=id=>({id,type:'single',text:'二选一',options:[{key:'A',text:'甲'},{key:'B',text:'乙'}]});
   const questions=[q('a'),{...q('b'),imageKey:'img-b'}];
@@ -37,11 +37,11 @@ try {
  });
  const calls=await page.evaluate(()=>window.__calls);assert.equal(calls.length,2);assert.equal(calls[0].auth,'Bearer text-key');assert.equal(typeof calls[0].body.messages[0].content,'string');
  assert.equal(calls[1].auth,'Bearer vision-key');assert.equal(calls[1].url,'https://vision.example.invalid/v1/chat/completions');assert.equal(calls[1].body.messages[0].content[1].type,'image_url');
- await vision.getByText('测试图片识别（可能计费）',{exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-vision-settings] [role=status]').textContent.includes('随机数字图片识别通过'));
+ await vision.getByText('测试图片识别（可能计费）',{exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-ai-settings] [role=status]').textContent.includes('随机数字图片识别通过'));
  const probe=await page.evaluate(()=>({prompt:__calls.at(-1).body.messages[0].content[0].text,code:__drawnCode}));assert(!probe.prompt.includes(probe.code),'Expected answer must not appear in text prompt');
  await page.getByRole('dialog').getByText('知道了',{exact:true}).click();
  await page.evaluate(()=>window.__slow=true);await vision.getByText('测试图片识别（可能计费）',{exact:true}).click();await page.locator('[data-action=stop]').click();
- await page.waitForFunction(()=>document.querySelector('[data-vision-settings] [role=status]').textContent.includes('停止'));assert((await page.evaluate(()=>__aborts))>=1);
+ await page.waitForFunction(()=>document.querySelector('[data-ai-settings] [role=status]').textContent.includes('停止'));assert((await page.evaluate(()=>__aborts))>=1);
  await page.locator('[data-setting=ai-mode]').selectOption('off');assert(await vision.isHidden());assert(await main.isHidden());
  console.log('Dual-provider settings, text/image payload routing, private credentials, random image probe and manual-stop cancellation passed. Synthetic model responses; no live API or course claims.');
 } finally {await browser.close();}

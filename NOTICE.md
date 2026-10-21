@@ -22,3 +22,7 @@
 ## 字体解析依赖（1.2.0）
 
 Typr.js、Typr.U.js 直接取自 Photopea 上游固定提交；JavaScript-MD5 取自 blueimp 2.19.0。源码字节与 SHA-256 均记录在 [依赖清单](vendor/font/manifest.json)，对应完整 MIT 许可证保留在同目录并嵌入构建。项目自写字体读取、校验与分流逻辑，不复制参考项目的业务实现。固定字形字典由 forestpolice.org 提供，运行时只读 JSON，不随仓库重分发，网络与缓存范围见[隐私说明](docs/SECURITY.md)。
+
+## AI 角色和品牌图标（1.3.0）
+
+角色为参考用户指定形象后生成的界面素材，来源、生成记录和适用说明见 [角色图鉴](docs/THEMES.md) 与 assets/personas。模型品牌图标来自 LobeHub/lobe-icons，MIT 完整许可见 assets/model-icons/LICENSE.txt，固定提交和文件哈希见 manifest.json。品牌及原角色权利仍归各权利人，不代表官方合作。

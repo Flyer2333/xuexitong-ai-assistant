@@ -113,6 +113,9 @@
         return c;
     };
     function transport(config, path, payload) {
+        // Homework requests often run in a child frame without a decorated panel.
+        // Keep connection health in shared userscript storage in every frame.
+        if (!root.XxtPersonaHealth && root.XxtPersonas && typeof GM_getValue === 'function') root.XxtPersonaHealth = root.XxtPersonas.create(GM_getValue, GM_setValue);
         let handle, settled = false, cancel;
         const promise = new Promise((resolve, reject) => {
             cancel = () => { if (!settled) { settled = true; handle?.abort(); reject(new Error('已停止本次 AI 调用')); } };
@@ -131,27 +134,52 @@
                         if (settled) return; settled = true;
                         try {
                             if (response.finalUrl && new URL(response.finalUrl).origin !== new URL(spec.url).origin) throw new Error('API 跳转到其他主机，已拒绝响应');
-                            if (response.status < 200 || response.status >= 300) { const error=new Error(({ 400: 'API 参数或模型不兼容', 401: 'API Key 或连接码无效', 403: 'API 权限或地区限制', 404: '模型或接口地址不存在', 429: '触发速率限制或余额不足' })[response.status] || `API 返回 HTTP ${response.status}`);error.status=response.status;throw error; }
+                            if (response.status < 200 || response.status >= 300) {
+                                const error=new Error(({400:'API 参数或模型不兼容',401:'API Key 或连接码无效',403:'API 权限或地区限制',404:'模型或接口地址不存在',429:'触发速率限制或余额不足'})[response.status]||`API 返回 HTTP ${response.status}`);error.status=response.status;
+                                try{const body=JSON.parse(response.responseText.slice(0,65536)),code=body.error?.code||body.error?.type||body.code;if(typeof code==='string'&&/^[a-zA-Z0-9_.-]{1,80}$/.test(code))error.code=code;
+                                    if(/model.{0,50}(?:does not exist|not found|not exist)|模型.{0,20}不存在/i.test(String(body.error?.message||'')))error.code='model_not_found';
+                                }catch{}throw error;
+                            }
                             if (response.responseText.length > 8 * 1024 * 1024) throw new Error('API 响应过大');
                             let data; try { data = JSON.parse(response.responseText); } catch { throw new Error('API 返回非 JSON，请检查地址或网络'); }
                             const result=parse(spec.protocol, data, payload?.questions, probe, imageTest);
                             try{root.XxtProfiles?.create(GM_getValue,GM_setValue).markUsed(c);}catch{}
+                            if(!c.vision)root.XxtPersonaHealth?.success(c);
+                            root.document?.dispatchEvent(new Event('xxt-connection-changed'));
                             resolve(result);
-                        } catch (error) { reject(error); }
+                        } catch (error) { if(!c.vision)root.XxtPersonaHealth?.failure(c,error);root.document?.dispatchEvent(new Event('xxt-connection-changed'));reject(error); }
                     },
-                    onerror() { if (!settled) { settled = true; reject(new Error('AI 连接失败：检查地址、网络与油猴跨域授权')); } },
-                    ontimeout() { if (!settled) { settled = true; reject(new Error('AI 响应超时')); } }, onabort: () => cancel()
+                    onerror() { if (!settled) { settled = true; const error=new Error('AI 连接失败：检查地址、网络与油猴跨域授权');if(!c.vision)root.XxtPersonaHealth?.failure(c,error);reject(error); } },
+                    ontimeout() { if (!settled) { settled = true; const error=new Error('AI 响应超时');if(!c.vision)root.XxtPersonaHealth?.failure(c,error);reject(error); } }, onabort: () => cancel()
                 });
             } catch (error) { settled = true; reject(error); }
         });
         return { promise, abort() { cancel?.(); } };
     }
     function request(path, payload) {
-        if (path !== '/solve' || !root.XxtDispatch) return transport(load(), path, payload);
-        const configuredVision = GM_getValue('xxt-ai-vision-enabled', false) ? load('xxt-ai-vision-config') : null;
+        if(path==='/test-selected')return testSelected();
+        if (path !== '/solve' || !root.XxtDispatch) return transport({...load(),vision:false}, path, payload);
+        const configuredVision = imageConfig();
         return root.XxtDispatch.run(payload, { base:load(), vision:configuredVision,
-            routing:GM_getValue('xxt-ai-routing',true), transport,
+            routing:true, transport,
             progress:info => root.XxtRequestProgress?.(info) });
+    }
+    function imageConfig(){const c=GM_getValue('xxt-ai-vision-enabled',false)?load('xxt-ai-vision-config'):null;return c?.key?c:null;}
+    function testSelected(){
+        let active,cancelled=false;
+        const promise=(async()=>{
+            const text=load(),image=imageConfig(),results=[];
+            const tasks=[];if(text.key)tasks.push({role:'文字',config:{...text,vision:false}});if(image)tasks.push({role:'图片',config:image});
+            if(!tasks.length)throw Error('请先保存接口，并选择用于文字或图片。');
+            for(const task of tasks){
+                if(cancelled)throw Error('已停止本次 AI 测试');
+                try{active=task.role==='图片'?testImages(task.config):transport(task.config,'/health');const result=await active.promise;
+                    if(task.role==='图片'&&!result.verified){const error=Error(result.message);error.code='IMAGE_MISMATCH';throw error;}
+                    results.push({role:task.role,provider:task.config.provider,model:task.config.model,character:root.XxtPersonas?.character(task.config),success:true});
+                }catch(error){if(cancelled||/停止|取消/.test(error.message))throw error;results.push({role:task.role,provider:task.config.provider,model:task.config.model,character:root.XxtPersonas?.character(task.config),success:false,...root.XxtPersonas.explain(error)});}
+            }
+            return {success:results.every(r=>r.success),results};
+        })();return {promise,abort(){cancelled=true;active?.abort();}};
     }
     let imageProbe;
     function cancelImageTest() { imageProbe?.abort(); imageProbe = null; }
@@ -174,12 +202,14 @@
             const fingerprint=[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('');
             if(cancelled) throw new Error('图片测试已取消');
             GM_setValue('xxt-image-capability',{fingerprint,at:Date.now(),verified:true});
+            if(root.XxtPersonas)GM_setValue('xxt-image-connection',{fingerprint:root.XxtPersonas.fingerprint(config),at:Date.now()});
+            root.document?.dispatchEvent(new Event('xxt-connection-changed'));
             return {verified:true,message:'随机数字图片识别通过；不代表所有复杂图片都能正确作答'};
         })();
         imageProbe = {promise,abort(){cancelled=true;job?.abort();}};
         return imageProbe;
     }
-    const api = { presets, defaults, normalize, build, parse, load, request, transport, testImages, cancelImageTest, catalog };
+    const api = { presets, defaults, normalize, build, parse, load, request, transport, testImages, cancelImageTest, catalog, imageConfig, testSelected };
     if (typeof module === 'object' && module.exports) module.exports = api;
     root.XxtAi = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

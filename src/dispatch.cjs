@@ -33,21 +33,22 @@
         }
         return result;
     }
-    function run(payload, { routing = true, base, vision, transport, progress = () => {} }) {
+    function run(payload, { base, vision, transport, progress = () => {} }) {
         let active, cancelled = false;
         const check = () => { if (cancelled) throw new Error('已停止本次 AI 调用'); };
         const promise = (async () => {
-            const parts = batches(payload, { routing }), answers = [];
+            const skipped=(payload.questions||[]).filter(q=>needsVision(q)&&!vision?.key).map(q=>({id:q.id,reason:'未配置图片接口，已跳过图片题'}));
+            const accepted=(payload.questions||[]).filter(q=>!skipped.some(x=>x.id===q.id));
+            const parts = batches({...payload,questions:accepted}, { routing:true }), answers = [];
             for (let i = 0; i < parts.length; i++) {
                 check(); const part = parts[i];
-                const config = part.kind === 'legacy' ? base : part.kind === 'text' ? { ...base, vision: false } : { ...(vision || base), vision: true };
-                if (part.kind === 'vision' && !vision && !base.vision) throw new Error('图片题需要配置视觉模型，或为当前模型开启截图');
+                const config = part.kind === 'text' ? { ...base, vision: false } : { ...vision, vision: true };
                 progress({ batch: i + 1, total: parts.length, kind: part.kind, count: part.questions.length });
                 active = transport(config, '/solve', part); const result = await active.promise; check();
                 answers.push(...result.answers);
             }
             check();
-            return { answers: payload.questions.map(q => answers.find(a => a.id === q.id)) };
+            return { answers: accepted.map(q => answers.find(a => a.id === q.id)),skipped };
         })();
         return { promise, abort() { cancelled = true; active?.abort(); } };
     }

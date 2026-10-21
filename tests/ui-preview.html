@@ -1,0 +1,26 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>学习助手 · UI 开发预览</title>
+<style>body{margin:0;background:#e8edf2;color:#283448;font:16px/1.8 system-ui}main{max-width:680px;padding:4vw}nav{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);padding:8px;display:flex;flex-wrap:wrap;gap:6px;border:1px solid #bcc5d1;background:#eee;z-index:2147483647;border-radius:12px;max-width:calc(100vw - 24px)}nav a{font:12px system-ui;padding:7px;border-radius:6px;color:#283448;text-decoration:none}nav a[aria-current=true]{background:#fff;box-shadow:0 1px 4px #aaa}a{color:inherit}</style>
+<main><h1>学习助手 · 开发预览</h1><p>此页只使用模拟接口，不连接课程，不发送真实请求或密钥。底部开关为开发工具，不会进入发布脚本。</p><div id="coursetree"><div class="posCatalog_active"><span class="posCatalog_name">课程章节预览</span></div></div><p>状态栏、接口列表、默认 / AI 开关和测试成功 / 失败均可操作。</p><p id="fake-version"></p><a href="?brand=deepseek">DeepSeek</a> · <a href="?brand=openai">GPT</a> · <a href="?brand=claude">Claude</a></main>
+<nav id="dev-data" aria-label="Development data switch"></nav>
+<script>
+const qs=new URLSearchParams(location.search),dataset=qs.get('data')||'demo',brand=qs.get('brand')||'deepseek';
+window.unsafeWindow=window;window.__requests=[];window.__opened=[];window.__offset=0;const realNow=Date.now;Date.now=()=>realNow()+window.__offset;
+const models={deepseek:['deepseek-flash','chat','https://api.deepseek.com/v1'],openai:['gpt-6.1-sol','responses','https://api.openai.com/v1'],claude:['claude-sonnet-5-5','anthropic','https://api.anthropic.com/v1'],gemini:['gemini-3.1-pro-preview','gemini','https://generativelanguage.googleapis.com/v1beta'],zhipu:['glm-5.3','chat','https://open.bigmodel.cn/api/paas/v4'],kimi:['kimi-k3','chat','https://api.moonshot.cn/v1'],qwen:['qwen3.5-plus','chat','https://dashscope.aliyuncs.com/compatible-mode/v1'],doubao:['doubao-seed-2-0-pro-260215','chat','https://ark.cn-beijing.volces.com/api/v3'],xiaomi:['mimo-v2.6-flash','chat','https://api.xiaomimimo.com/v1']};
+const [model,protocol,baseUrl]=models[brand]||models.deepseek,config={provider:brand,model,protocol,baseUrl,key:'fixture-key-0001',vision:false,maxTokens:8192,reasoning:'',jsonMode:false};
+window.__gm={'xxt-quiet-enabled':false,'xxt-ai-enabled':true,'xxt-ui-preference':'auto','xxt-purpose-schema':true,'xxt-ai-config':config};
+const row=(i,c)=>({id:'fixture-'+i,config:c,createdAt:Date.now()-86400000,updatedAt:Date.now(),lastUsedAt:null});
+let profiles=[row(1,config),row(2,{...config,provider:'openai',protocol:'responses',model:'gpt-6.1-sol',baseUrl:'https://api.openai.com/v1',key:'fixture-key-0002',vision:true})];
+if(dataset==='worst')profiles=[row(1,{...config,model:'accounts/research-university/deployments/qwen3-235b-a22b-instruct-fp8-international-2026-10-20',baseUrl:'https://department-of-interdisciplinary-artificial-intelligence.research-university.example.org/openai/compatible/v1'}),row(2,{...config,model:'多语言推理模型·研究室共享接口（含数学公式识别）🔭',provider:'custom'}),row(3,{...config,model:'o3',provider:'openai'}),row(4,{...config,model:'模型尚未测试',provider:'custom'})];
+if(dataset==='empty'){profiles=[];__gm['xxt-ai-config']={...config,key:''};}
+if(dataset==='one')profiles=profiles.slice(0,1);if(dataset==='30')profiles=Array.from({length:30},(_,i)=>row(i+1,{...config,model:'department-model-'+(i+1),key:'fixture-key-'+(i+1)}));
+__gm['xxt-ai-profiles']=profiles;
+window.GM_getValue=(k,d)=>__gm[k]??d;window.GM_setValue=(k,v)=>__gm[k]=structuredClone(v);window.GM_openInTab=(...args)=>__opened.push(args);
+const draw=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(text,...a){window.__testCode=String(text);return draw.call(this,text,...a);};
+window.GM_xmlhttpRequest=spec=>{__requests.push({url:spec.url,body:spec.data});let cancelled=false;
+ setTimeout(()=>{if(cancelled)return;if(spec.url.includes('/dist/release.json')){spec.onload({status:200,responseText:JSON.stringify({version:'1.3.0',date:'2026-10-21',changes:['预览内容']})});return;}
+ if(window.__fail){spec.onload({status:404,responseText:JSON.stringify({error:{code:'model_not_found',message:'fixture'}})});return;}
+ let val={ok:true};if(spec.data?.includes('六位数字'))val={code:window.__wrong?'000000':window.__testCode};
+ const body=JSON.stringify(val);const response=spec.url.includes('/responses')?{output:[{content:[{type:'output_text',text:body}]}]}:spec.url.includes('anthropic')?{content:[{type:'text',text:body}]}:spec.url.includes('googleapis')?{candidates:[{content:{parts:[{text:body}]}}]}:{choices:[{message:{content:body}}]};spec.onload({status:200,responseText:JSON.stringify(response)});
+ },20);return{abort(){cancelled=true;spec.onabort?.();}};};
+for(const [id,label]of [['demo','Demo data'],['worst','Worst case'],['empty','Empty'],['one','One'],['30','30 profiles']]){const a=document.createElement('a');a.href='?'+new URLSearchParams({brand,data:id});a.textContent=label;a.setAttribute('aria-current',String(dataset===id));document.querySelector('#dev-data').append(a);}
+</script><script src="/dist/xuexitong-ai-assistant.user.js"></script></html>

@@ -205,7 +205,7 @@
         GM_setValue(key, XxtRunLedger.record(list,entry));
         notify(`已记录待复核：${chapter}，${reason}。继续处理其余内容…`);
     }
-    async function recoverAutomatic(reason) {
+    async function recoverAutomatic(reason, retryConnection = true) {
         const serial = ++recoverySerial, context = courseTask();
         const valid = () => serial === recoverySerial && context === courseTask() && !quietNow() && !unloaded;
         recovering = true;
@@ -226,7 +226,7 @@
                 await start({ recovery: true });
                 return;
             }
-            if (aiEnabled() && !recoveryAttempts.has(context)) {
+            if (retryConnection && aiEnabled() && !recoveryAttempts.has(context)) {
                 recoveryAttempts.add(context);
                 notify(`遇到问题：${reason}。自动测试 AI 并重新开始一次…`);
                 try { await request('/health'); }
@@ -249,7 +249,7 @@
             const marker = view?.markers.find(item => !item.done && !skippedMarkers.has(item.element) && item.kind !== 'check');
             const question = view?.questions.find(asset => !questionDone(asset));
             const asset = video || file || (!marker && question);
-            if (!aiEnabled() && /视频弹题/.test(reason)) {
+            if ((!aiEnabled() || !XxtAi.imageConfig()) && /视频弹题/.test(reason)) {
                 for (const hit of Q.across(pageWindow)) skippedQuizWindows.add(hit.win);
                 for (const [source, entry] of quizFrames) {
                     skippedQuizWindows.add(source);
@@ -683,13 +683,24 @@
         busy = true;
         const currentEpoch = epoch;
         await globalThis.XxtFonts?.prepare(document,()=>{if(stopped||epoch!==currentEpoch)throw Error('已停止');});
-        const entries = D.extract(document), questions = entries.map(entry => entry.question);
-        const signature = JSON.stringify(questions);
+        const allEntries = D.extract(document), allQuestions = allEntries.map(entry => entry.question);
+        const signature = JSON.stringify(allQuestions);
+        const known = XxtCodexCore.recallAnswers(allQuestions, record.knownAnswers || []);
+        const omitted=allEntries.filter(entry=>!XxtAi.imageConfig()&&XxtDispatch.needsVision(entry.question)&&!known.some(a=>a.id===entry.question.id));
+        const entries=allEntries.filter(entry=>!omitted.includes(entry)),questions=entries.map(entry=>entry.question);
+        const skipImages=async()=>{
+            const reason=`未配置图片接口，已跳过 ${omitted.length} 道图片题${questions.length?'；文字题已处理，但本页未提交':''}，留待补做`;
+            record.phase='pending';save();
+            if(coursePage())await recoverAutomatic(reason,false);
+            else if(parentManaged){report('skip-check',{task,reason});automatic=false;stopped=true;notify(reason);}
+            else {notify(reason);const next=D.findNext(document);if(next&&D.enabled(next)){next.click();automatic=false;}}
+        };
         const assertCurrent = () => {
             if (stopped || epoch !== currentEpoch || signature !== JSON.stringify(D.extract(document).map(entry => entry.question))) throw new Error('题目已切换或已停止，取消旧答案');
             if (submit) beforeClick();
         };
         try {
+            if(!questions.length&&omitted.length){if(submit)await skipImages();else notify(`未配置图片接口，${omitted.length} 道图片题已跳过。`);return;}
             XxtCodexCore.validateQuestions(questions, 200);
             const learned = XxtCodexCore.recallAnswers(questions, record.knownAnswers || []);
             const retryPlan = XxtRetry.plan(questions, retryAttempts());
@@ -699,7 +710,7 @@
                 const seed = questions.map(q => learned.find(a => a.id === q.id) || { id: q.id, choices: [q.options[0].key] });
                 if (XxtRetry.novel(questions, seed, retryPlan.forbidden, learned).exhausted) { await navigate('保留平台已确认答案后，其余可区分的答案组合均已尝试'); return; }
             }
-            const visualEntries = GM_getValue('xxt-ai-routing', true) ? pendingEntries.filter(entry => XxtDispatch.needsVision(entry.question)) : pendingEntries;
+            const visualEntries = pendingEntries.filter(entry => XxtDispatch.needsVision(entry.question));
             notify(pendingEntries.length ? `已读取 ${pendingEntries.length} 道题，其中 ${visualEntries.length} 道需要截图（${learned.length} 道已有平台正确答案）…` : '已读取全部平台正确答案，直接填写…');
             if (visualEntries.length) await XxtQuestionCapture.readyFonts(document, assertCurrent);
             const images = [], imageQuestionIds = [];
@@ -727,7 +738,7 @@
             }
             assertCurrent();
             answers ||= questions.map(question => learned.find(answer => answer.id === question.id));
-            if (submit) {
+            if (submit && !omitted.length) {
                 const fresh = XxtRetry.novel(questions, answers, retryPlan.forbidden, learned);
                 if (fresh.exhausted) { await navigate('保留平台已确认答案后，其余可区分的答案组合均已尝试'); return; }
                 answers = fresh.answers;
@@ -736,6 +747,7 @@
             notify(answers.map(answer => `第 ${questions.findIndex(q => q.id === answer.id) + 1} 题：${(answer.texts || answer.choices).join('、') || '不确定'}${answer.randomized ? '（随机）' : ''}\n${answer.explanation}`).join('\n\n'));
             if (!submit) return;
             await D.applyAnswers(entries, answers, assertCurrent);
+            if(omitted.length){await skipImages();return;}
             const button = D.unique([...document.querySelectorAll('.btnSubmit.workBtnIndex')].filter(D.enabled));
             if (!button) throw new Error('提交按钮缺失或不唯一，已停止');
             assertCurrent();
@@ -1170,7 +1182,8 @@
                         if (XxtRetry.novel([entry.question], seed, retryPlan.forbidden).exhausted)
                             throw new Error('视频弹题的可区分答案组合均已尝试，已暂停，请核对题目或平台反馈');
                         const images = [], imageQuestionIds = [];
-                        if (!GM_getValue('xxt-ai-routing', true) || XxtDispatch.needsVision(entry.question)) {
+                        if (XxtDispatch.needsVision(entry.question)) {
+                            if(!XxtAi.imageConfig())throw Error('未配置图片接口：跳过图片视频弹题，留待补做');
                             await XxtQuestionCapture.readyFonts(panel.ownerDocument, assertQuestion); assertQuestion();
                             images.push(await XxtQuestionCapture.capture(panel, { guard: assertQuestion, backgroundColor: '#171717',
                                 ignoreElements: el => el.tagName === 'VIDEO' || !!el.closest?.('[data-xxt-codex-panel]') }));
@@ -1485,7 +1498,13 @@
                     if (action === 'connect') {
                         if (!aiEnabled()) { notify('不接入 AI 模式无需连接测试，点击“开始自动”即可。'); return; }
                         if (busy) throw new Error('请先停止当前任务再测试 AI');
-                        apiFailureShown=false;apiFailureUntil=0;await request('/health'); notify('AI 连接测试通过，点击“开始自动”即可。');
+                        apiFailureShown=false;apiFailureUntil=0;
+                        let result;
+                        try{result=await request('/test-selected');}catch(error){
+                            if(!/停止|取消|夜间/.test(error.message)){const c=XxtAi.load();globalThis.XxtAssistantTheme.testResult(button,{success:false,results:[{role:'文字',provider:c.provider,model:c.model,character:XxtPersonas.character(c),success:false,...XxtPersonas.explain(error)}]});}throw error;
+                        }
+                        notify(result.success?'AI 连接测试通过，点击“开始自动”即可。':'部分接口测试未通过，请查看结果中的原因。');
+                        globalThis.XxtAssistantTheme.testResult(button,result);
                     }
                 } catch (error) { notify(error.message); }
             });
@@ -1635,6 +1654,7 @@
             }
             if (data.type === 'start') { automatic = true; stopped = false; setTask(courseTask()); frames.set(event.source, { nonce: data.nonce }); grant(event.source, frames.get(event.source), true); }
             if (data.type === 'stop') { recoverySerial++; resumeAfterQuiet = false; pause(data.reason || '自动模式已停止。', false); }
+            if(data.type==='skip-check'&&automatic&&!stopped&&data.task===courseTask()&&frames.get(event.source)?.nonce===data.nonce){void recoverAutomatic(data.reason,false);}
             if (data.type === 'pause') pause(data.reason || '自动模式已停止。', data.manual !== true);
             if (data.type === 'finished' && automatic && data.task === courseTask() && frames.get(event.source)?.kind === 'check' &&
                 frames.get(event.source)?.nonce === data.nonce && !completedSenders.has(data.nonce)) {

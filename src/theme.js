@@ -1,117 +1,31 @@
 (() => {
     'use strict';
-    const css = `
-[data-xxt-codex-panel] .xxt-update-banner{position:relative;background:var(--tint);border-bottom:2px solid var(--accent);padding:12px 40px 12px 16px;overflow-wrap:anywhere}
-[data-xxt-codex-panel] .xxt-update-banner strong{display:block;font-size:13px;color:var(--accent)}
-[data-xxt-codex-panel] .xxt-update-banner button{border:1px solid var(--line);background:#fff;color:var(--accent);border-radius:8px;padding:5px 9px;margin:8px 6px 0 0}
-[data-xxt-codex-panel] .xxt-update-banner .xxt-update-close{position:absolute;right:5px;top:3px;font-size:20px;border:0;background:transparent;margin:0;padding:0;width:30px;height:30px}
-[data-xxt-codex-panel] .xxt-profile-list{max-height:280px;overflow:auto;margin-top:10px}
-[data-xxt-codex-panel] .xxt-profile{display:grid;gap:5px;padding:10px;background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;overflow-wrap:anywhere}
-[data-xxt-codex-panel] .xxt-profile strong{font-size:12px}
-[data-xxt-codex-panel] [data-saved-profiles] p{font-size:11px;color:var(--muted)}
-[data-xxt-codex-panel] .xxt-test-result{color:var(--ink);font:14px/1.7 system-ui,'Microsoft YaHei',sans-serif;background:var(--surface);border:1px solid var(--line);border-radius:22px;max-width:min(380px,calc(100vw - 32px));padding:24px;text-align:center;box-shadow:0 20px 70px #17255430;overflow-wrap:anywhere}
-[data-xxt-codex-panel] .xxt-test-result::backdrop{background:#17255455}
-[data-xxt-codex-panel] .xxt-test-result h3{color:var(--accent);font-size:18px;margin:8px 0}
-[data-xxt-codex-panel] .xxt-test-result[data-image-test-result=failure] h3{color:#a13b4c}
-[data-xxt-codex-panel] .xxt-test-icon{height:100px;display:grid;place-items:center;font-size:52px;color:var(--accent)}
-[data-xxt-codex-panel] .xxt-test-icon img{width:110px;height:100px;object-fit:contain}
-[data-xxt-codex-panel] .xxt-test-result small{display:block;color:var(--muted)}
-[data-xxt-codex-panel] .xxt-test-result button{margin-top:18px;border:0;border-radius:10px;padding:9px 28px;background:var(--button);color:var(--button-ink)}
-
-[data-xxt-codex-panel] button:disabled{opacity:.45;cursor:not-allowed}
-[data-xxt-codex-panel]{--ink:#1e293b;--accent:#4f46e5;--line:#e2e8f0;--surface:#f8fafc;--tint:#eef2ff;--muted:#64748b;--button:#4f46e5;--button-ink:#fff;color:var(--ink)!important;font:13px/1.6 system-ui,'Microsoft YaHei',sans-serif!important;color-scheme:light}
-[data-xxt-codex-panel] *{box-sizing:border-box}
-[data-xxt-codex-panel] .xxt-shell{border:1px solid var(--line);border-radius:18px;background:var(--surface);box-shadow:0 16px 50px #17255424;overflow:hidden}
-[data-xxt-codex-panel] .xxt-head{display:flex;align-items:center;gap:10px;padding:18px;background:linear-gradient(120deg,var(--tint),var(--surface));border-bottom:1px solid var(--line);cursor:grab}
-[data-xxt-codex-panel] .xxt-head:before{flex-shrink:0;content:'AI';display:grid;place-items:center;background:var(--button);color:#fff;font-weight:800;border-radius:12px;width:38px;height:38px;font-size:14px}
-[data-xxt-codex-panel] strong{font-size:16px;letter-spacing:.3px}
-[data-xxt-codex-panel] .xxt-version{color:var(--muted);font-size:10px;letter-spacing:1px}
-[data-xxt-codex-panel] .xxt-fold{flex-shrink:0;margin-left:auto;border:0;background:#fff;color:var(--muted);border-radius:8px;width:28px;height:28px;cursor:pointer}
-[data-xxt-codex-panel] .xxt-body{padding:16px;max-height:70vh;overflow:auto}
-[data-xxt-codex-panel] .xxt-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
-[data-xxt-codex-panel] button{font:inherit;cursor:pointer}
-[data-xxt-codex-panel] .xxt-actions button{margin:0!important;padding:10px!important;border:1px solid #d9dfeb;border-radius:10px;background:#fff;color:#475569;font-weight:600}
-[data-xxt-codex-panel] .xxt-actions button:hover{background:var(--tint);border-color:#a5b4fc}
-[data-xxt-codex-panel] .xxt-actions [data-action=start]{background:var(--button);color:var(--button-ink);border-color:var(--button)}
-[data-xxt-codex-panel] .xxt-actions [data-action=stop]{color:#be123c;background:#fff8fa;border-color:#f5d3dd}
-[data-xxt-codex-panel] .xxt-state{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:8px}
-[data-xxt-codex-panel] .xxt-state:before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent)}
-[data-xxt-codex-panel][data-sleeping=true] .xxt-state:before{background:#94a3b8}
-[data-xxt-codex-panel] pre{font:inherit!important;margin:0!important;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px!important;white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto;color:#475569}
-[data-xxt-codex-panel] .xxt-status-card{--notice-ink:#9a4518;--notice-bg:#fff4e8;position:relative;isolation:isolate;border:1px solid var(--line);border-radius:16px;background:linear-gradient(135deg,var(--tint),#fff 75%);box-shadow:0 4px 14px #17255406;overflow:hidden}
-[data-xxt-codex-panel] .xxt-status-card:before{content:'';position:absolute;inset:0 auto 0 0;width:3px;background:var(--accent);opacity:.65}
-[data-xxt-codex-panel] .xxt-status-top{display:flex;align-items:center;gap:8px;padding:11px 14px 0;color:var(--muted);font-size:11px}
-[data-xxt-codex-panel] .xxt-status-symbol{display:grid;place-items:center;flex-shrink:0;width:24px;height:24px;border-radius:8px;background:#fff;border:1px solid var(--line);color:var(--accent);font-size:14px;font-weight:700}
-[data-xxt-codex-panel] .xxt-status-badge{margin-left:auto;border-radius:99px;padding:2px 8px;color:var(--accent);background:#fff;border:1px solid var(--line);font-size:10px;white-space:nowrap}
-[data-xxt-codex-panel] .xxt-status-card pre{font-family:'DengXian','等线','Microsoft YaHei UI','PingFang SC',sans-serif!important;font-size:14px!important;font-weight:500!important;font-variant-numeric:tabular-nums;line-height:1.85!important;letter-spacing:.15px;border:0;border-radius:0;background:transparent;color:var(--ink);padding:10px 15px 14px!important;max-height:190px;overflow:auto;overflow-wrap:anywhere}
-[data-xxt-codex-panel] .xxt-status-card pre:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}
-[data-xxt-codex-panel] .xxt-status-card[data-status=success] .xxt-status-symbol{color:#18744c;background:#effaf3}
-[data-xxt-codex-panel] .xxt-status-card[data-status=error] .xxt-status-symbol{color:#a33c45;background:#fff0f1}
-[data-xxt-codex-panel] .xxt-status-card[data-status=paused] .xxt-status-symbol,[data-xxt-codex-panel] .xxt-status-card[data-status=rest] .xxt-status-symbol{color:var(--muted)}
-[data-xxt-codex-panel][data-skin=nailoong] .xxt-status-card{--notice-ink:#80500a;--notice-bg:#fff0c3;background:linear-gradient(130deg,#fff0c6,#fffdf5 80%);border-radius:18px 18px 18px 7px;box-shadow:0 4px 14px #92570d08}
-[data-xxt-codex-panel][data-skin=naiwa] .xxt-status-card{--notice-ink:#686219;--notice-bg:#f7f0c9;background:radial-gradient(ellipse at 100% 0,#f6edb4,transparent 65%),#fffdf1;border-radius:18px 18px 8px 18px;box-shadow:0 4px 14px #6e651009}
-[data-xxt-codex-panel][data-skin=naiwa] .xxt-status-symbol{border-radius:50%;color:#60652d;background:#fffef2}
-[data-xxt-codex-panel] .xxt-api-warning{padding:11px 14px 12px;margin:0;border-top:1px dashed var(--line);background:var(--notice-bg);color:var(--notice-ink);font-family:'DengXian','等线','Microsoft YaHei UI',sans-serif;font-size:12px;line-height:1.8;overflow-wrap:anywhere}
-[data-xxt-codex-panel] .xxt-api-warning strong{display:block;font:600 12px/1.6 system-ui,'Microsoft YaHei',sans-serif;letter-spacing:0;margin-bottom:3px;color:var(--notice-ink)}
-[data-xxt-codex-panel] .xxt-api-warning p{margin:0}
-[data-xxt-codex-panel] .xxt-api-warning time{display:block;margin-top:4px;font-size:11px;font-variant-numeric:tabular-nums;opacity:.85}
-[data-xxt-codex-panel] .xxt-foreground-note{margin:10px 0 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--tint);color:var(--ink);font-size:12px;line-height:1.7}
-[data-xxt-codex-panel] .xxt-settings{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;color:var(--muted);font-size:11px}
-[data-xxt-codex-panel] .xxt-rate-setting{display:flex;width:100%;justify-content:space-between;align-items:center}
-[data-xxt-codex-panel] input,[data-xxt-codex-panel] select{font:inherit;color:#334155;background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:7px;min-width:0}
-[data-xxt-codex-panel] input[type=checkbox]{accent-color:var(--accent);vertical-align:middle;margin:0 4px 0 0}
-[data-xxt-codex-panel] details{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;font-size:12px;color:var(--muted)}
-[data-xxt-codex-panel] summary{cursor:pointer;font-weight:600;color:#475569}
-[data-xxt-codex-panel] details img{max-width:100%;border-radius:8px;margin-top:8px}
-[data-xxt-codex-panel] .ai-form{display:grid;gap:10px;margin-top:12px}
-[data-xxt-codex-panel] .ai-form>label{display:grid;gap:4px;font-size:11px}
-[data-xxt-codex-panel] .ai-form small{color:var(--muted);font-size:11px;line-height:1.6}
-[data-xxt-codex-panel] .ai-form>.xxt-update-auto-label{display:flex;align-items:center;gap:5px}
-[data-xxt-codex-panel] [data-xxt-updates] ul,[data-xxt-codex-panel] [data-xxt-updates] ol{padding-left:18px;margin:8px 0;font-size:12px}
-[data-xxt-codex-panel] [data-xxt-updates] li+li{margin-top:6px}
-[data-xxt-codex-panel] .xxt-update-dismiss{justify-self:start;border:1px solid var(--line);border-radius:8px;padding:6px 12px;background:#fff;color:var(--accent)}
-[data-xxt-codex-panel] .ai-buttons{display:flex;flex-wrap:wrap;gap:8px}
-[data-xxt-codex-panel] .xxt-route-control{display:block;margin-top:10px;font-size:12px;color:var(--ink)}
-[data-xxt-codex-panel] .xxt-route-note{font-size:11px;line-height:1.7;color:var(--muted);margin:6px 0}
-[data-xxt-codex-panel] [hidden]{display:none!important}
-[data-xxt-codex-panel] [data-skipped-log] button{border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin:4px 6px 4px 0;background:#fff;color:var(--accent)}
-[data-xxt-codex-panel] .ai-buttons button{border:1px solid #c7d2fe;background:var(--tint);color:#4338ca;border-radius:8px;padding:8px 12px}
-[data-xxt-codex-panel] .xxt-feedback{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;color:var(--muted);font-size:11px;line-height:1.7}
-[data-xxt-codex-panel] .xxt-feedback-links{display:flex;gap:14px;margin-bottom:4px}
-[data-xxt-codex-panel] .xxt-feedback a{color:#4f46e5;text-decoration:none;font-weight:600}
-[data-xxt-codex-panel] .xxt-feedback a:hover{text-decoration:underline}
-[data-xxt-codex-panel][data-skin=nailoong]{--ink:#51371f;--accent:#92570d;--line:#eddbb7;--surface:#fffdf5;--tint:#fff1cc;--muted:#7c6a50;--button:#f3c350;--button-ink:#49300f}
-[data-xxt-codex-panel][data-skin=naiwa]{--ink:#4e3d20;--accent:#8a600e;--line:#eadcb4;--surface:#fffef4;--tint:#fff5cf;--muted:#796b49;--button:#eac84b;--button-ink:#49370e}
-[data-xxt-codex-panel] .xxt-head>div{min-width:0;flex:1}
-[data-xxt-codex-panel] .xxt-head strong{font-size:17px;line-height:1.4}
-[data-xxt-codex-panel] .xxt-head:before{color:var(--button-ink)}
-[data-xxt-codex-panel] .xxt-fold{position:relative;z-index:4}
-[data-xxt-codex-panel] .xxt-skin-picker{display:flex;align-items:center;gap:5px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
-[data-xxt-codex-panel] .xxt-skin-label{font-size:11px;color:var(--muted);margin-right:auto}
-[data-xxt-codex-panel] .xxt-skin-picker button{font:inherit;font-size:11px;min-height:30px;padding:4px 12px;background:transparent;border:1px solid transparent;border-radius:999px;color:var(--muted)}
-[data-xxt-codex-panel] .xxt-skin-picker button[aria-pressed=true]{color:var(--accent);background:#fff;border-color:var(--line);box-shadow:0 2px 5px #17255408;font-weight:700}
-[data-xxt-codex-panel] button:focus-visible,[data-xxt-codex-panel] summary:focus-visible,[data-xxt-codex-panel] a:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-[data-xxt-codex-panel] .xxt-theme-mascot{position:absolute;right:14px;top:-72px;width:120px;height:100px;overflow:hidden;pointer-events:none;z-index:2;filter:drop-shadow(0 5px 6px #54351b20)}
-[data-xxt-codex-panel] .xxt-theme-mascot img{display:block;width:120px;height:auto;user-select:none;-webkit-user-drag:none}
-[data-xxt-codex-panel][data-skin=naiwa] .xxt-theme-mascot{width:120px;height:112px;right:14px;top:-88px;overflow:visible}
-[data-xxt-codex-panel][data-skin=naiwa] .xxt-theme-mascot img{width:120px;height:112px;object-fit:contain}
-[data-xxt-codex-panel] .xxt-feedback details{border:0;margin:3px 0 0;padding:0;font-size:11px}
-[data-xxt-codex-panel] .xxt-feedback summary{display:inline-block;color:#4f46e5;font-weight:600}
-[data-xxt-codex-panel] .xxt-feedback summary:before{content:'▸';display:inline-block;margin-right:4px}
-[data-xxt-codex-panel] .xxt-feedback details[open] summary:before{content:'▾'}
-[data-xxt-codex-panel] .xxt-feedback-copy{margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--tint)}
-[data-xxt-codex-panel] .xxt-feedback-copy>div+div{margin-top:6px}
-[data-xxt-codex-panel] [data-skipped-log] ul{padding-left:18px;margin:8px 0;overflow-wrap:anywhere}
-[data-xxt-codex-panel] [data-skipped-log] li+li{margin-top:6px}
-[data-xxt-codex-panel] [hidden]{display:none!important}
-`;
+    const css = XxtGlassCss;
     const vault=()=>XxtProfiles.create(GM_getValue,GM_setValue);
     const profilesChanged=()=>document.dispatchEvent(new Event('xxt-profiles-changed'));
+    function figure(id,index=1){
+        const asset=typeof XxtPersonaAssets==='undefined'?null:XxtPersonaAssets[id];if(!asset)return null;
+        const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg'),image=document.createElementNS(ns,'image');
+        const [x,y,w,h]=asset.cells[index];svg.setAttribute('viewBox',`${x*asset.width} ${y*asset.height} ${w*asset.width} ${h*asset.height}`);svg.setAttribute('aria-hidden','true');
+        const clip=document.createElementNS(ns,'clipPath'),rect=document.createElementNS(ns,'rect'),clipId='xxt-art-'+crypto.randomUUID();clip.setAttribute('id',clipId);clip.setAttribute('clipPathUnits','userSpaceOnUse');
+        for(const [k,v]of Object.entries({x:x*asset.width,y:y*asset.height,width:w*asset.width,height:h*asset.height}))rect.setAttribute(k,v);clip.append(rect);
+        image.setAttribute('width',asset.width);image.setAttribute('height',asset.height);image.setAttribute('href',asset.src);image.setAttribute('clip-path',`url(#${clipId})`);svg.append(clip,image);return svg;
+    }
+    function askImageUse(config,origin){
+        if(XxtAi.catalog.model(config.provider,config.model)?.vision!==false)return Promise.resolve(true);
+        return new Promise(resolve=>{
+            const panel=origin.closest('[data-xxt-codex-panel]'),dialog=document.createElement('dialog');dialog.className='xxt-test-result';dialog.setAttribute('aria-label','确认图片用途');
+            const h=document.createElement('h3'),p=document.createElement('p'),yes=document.createElement('button'),no=document.createElement('button');
+            h.textContent='这个模型似乎不支持图片';p.textContent='可能无法识别图片题。仍要把它设为图片接口吗？你也可以先查看服务商的模型说明。';yes.textContent='仍用于图片';no.textContent='取消';no.autofocus=true;
+            let accepted=false;yes.onclick=()=>{accepted=true;dialog.close();};no.onclick=()=>dialog.close();dialog.addEventListener('close',()=>{dialog.remove();origin.focus();resolve(accepted);},{once:true});dialog.append(h,p,no,yes);panel.append(dialog);dialog.showModal();
+        });
+    }
     function profileManager(onChange){
         const section=document.createElement('details'),heading=document.createElement('summary'),rows=document.createElement('div'),note=document.createElement('p'),link=document.createElement('a');
         section.dataset.savedProfiles='true';rows.className='xxt-profile-list';
         note.textContent='密钥仅保存在此浏览器的油猴存储中，调用时发送到你设置的接口。没有作者收集密钥的服务器；这不是加密保险箱。删除这里只移除本地配置，不撤销服务商密钥。';
         link.textContent='查看密钥与隐私说明';link.href='https://github.com/Flyer2333/xuexitong-ai-assistant/blob/main/docs/SECURITY.md';link.target='_blank';link.rel='noopener noreferrer';
+        const feedback=document.createElement('p');feedback.setAttribute('role','status');feedback.dataset.purposeFeedback='true';
         function render(){
             const saved=vault().list();heading.textContent=`已保存接口 · ${saved.length}`;rows.replaceChildren();
             for(const p of saved){
@@ -121,28 +35,37 @@
                 meta.textContent=`${host} · ${p.config.protocol}`;key.textContent=XxtProfiles.mask(p.config.key);
                 const date=value=>value?new Date(value).toLocaleString():'尚未成功调用';dates.textContent=`保存：${date(p.createdAt)} / 最近成功调用：${date(p.lastUsedAt)}`;buttons.className='ai-buttons';
                 for(const [label,slot] of [['用于文字','xxt-ai-config'],['用于图片','xxt-ai-vision-config']]){
-                    const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=()=>{const latest=vault().list().find(x=>x.id===p.id);if(!latest)return;onChange();GM_setValue(slot,latest.config);if(slot==='xxt-ai-vision-config')GM_setValue('xxt-ai-vision-enabled',true);profilesChanged();};buttons.append(b);
+                    const kind=slot==='xxt-ai-config'?'text':'image',active=vault().selected(p.config,kind);
+                    const b=document.createElement('button');b.type='button';b.textContent=label+(active?' ✓':'');b.dataset.purpose=kind;b.dataset.profileId=p.id;b.setAttribute('aria-pressed',String(active));
+                    b.onclick=async()=>{const latest=vault().list().find(x=>x.id===p.id);if(!latest)return;const pressed=vault().selected(latest.config,kind);if(!pressed&&kind==='image'&&!await askImageUse(latest.config,b))return;onChange();vault().assign(latest.config,kind,!pressed);feedback.textContent=pressed?`已取消此接口的${kind==='text'?'文字':'图片'}用途。`:`已设为${kind==='text'?'文字':'图片'}接口：${latest.config.model}。请点击“测试 AI”验证。`;profilesChanged();section.querySelector(`[data-purpose="${kind}"][data-profile-id="${p.id}"]`)?.focus();};buttons.append(b);
                 }
                 const remove=document.createElement('button');remove.type='button';remove.textContent='删除配置';remove.onclick=()=>{onChange();vault().remove(p.id);profilesChanged();};buttons.append(remove);item.append(name,meta,key,dates,buttons);rows.append(item);
             }
             if(!saved.length)rows.textContent='暂无已保存接口。在接口设置中填写后点击“保存设置”，即可在这里切换或删除。';
         }
         try{vault().migrate();}catch{}
-        section.append(heading,rows,note,link);section.addEventListener('toggle',()=>{if(section.open)render();});document.addEventListener('xxt-profiles-changed',render);render();return section;
+        section.append(heading,feedback,rows,note,link);section.addEventListener('toggle',()=>{if(section.open)render();});document.addEventListener('xxt-profiles-changed',render);render();return section;
     }
-    function imageResult(button,success,message,animate){
-        const panel=button.closest('[data-xxt-codex-panel]'),dialog=document.createElement('dialog');dialog.className='xxt-test-result';dialog.dataset.imageTestResult=success?'success':'failure';dialog.setAttribute('aria-label','图片识别测试结果');
-        const icon=document.createElement('div'),title=document.createElement('h3'),description=document.createElement('p'),scope=document.createElement('small'),close=document.createElement('button');icon.className='xxt-test-icon';
-        const skin=panel.dataset.skin,asset=XxtThemeAssets[skin];
-        if(asset){const img=document.createElement('img');img.src=asset;img.alt='';icon.append(img);}else icon.textContent=success?'✓':'!';
-        title.textContent=success?'恭喜，图片识别测试通过！':'本次图片识别未通过';description.textContent=message;scope.textContent=success?'已识别本次随机数字图片；不代表所有复杂题图都能答对。':'请检查模型是否支持图片、接口地址、密钥与额度。';
-        close.type='button';close.textContent='知道了';close.autofocus=true;close.onclick=()=>dialog.close();dialog.addEventListener('close',()=>{dialog.remove();button.focus();},{once:true});dialog.append(icon,title,description,scope,close);panel.append(dialog);dialog.showModal();
-        if(animate&&GM_getValue('xxt-ui-motion',true)&&!matchMedia('(prefers-reduced-motion: reduce)').matches){dialog.animate([{opacity:0,transform:'translateY(8px) scale(.96)'},{opacity:1,transform:'translateY(0) scale(1)'}],{duration:200,easing:'cubic-bezier(0.23,1,0.32,1)'});if(success)icon.animate([{transform:'rotate(-4deg) scale(.98)'},{transform:'rotate(4deg) scale(1.04)'},{transform:'rotate(0) scale(1)'}],{duration:280,easing:'cubic-bezier(0.23,1,0.32,1)'});}
+    function testResult(button,result){
+        const panel=button.closest('[data-xxt-codex-panel]'),dialog=document.createElement('dialog');dialog.className='xxt-test-result';
+        const success=result.success;dialog.dataset.imageTestResult=success?'success':'failure';dialog.setAttribute('aria-label','接口测试结果');
+        const title=document.createElement('h3'),scope=document.createElement('p'),close=document.createElement('button'),cast=document.createElement('div'),dismiss=document.createElement('button');cast.className='xxt-result-cast';title.textContent=success?'连接成功，可以开始了！':'本次测试有未通过的接口';dismiss.className='xxt-result-dismiss';dismiss.textContent='×';dismiss.setAttribute('aria-label','关闭测试结果');dismiss.onclick=()=>dialog.close();dialog.append(dismiss,title,cast);
+        for(const r of result.results){
+            const row=document.createElement('section'),art=document.createElement('div'),info=document.createElement('div'),label=document.createElement('strong'),description=document.createElement('p');row.className='xxt-result-row';row.dataset.testRole=r.role;row.dataset.result=r.success?'success':'failure';art.className='xxt-result-art';
+            const character=figure(r.character,r.success?2:3);if(character)art.append(character);else art.textContent=r.success?'✓':'!';
+            label.textContent=`${r.role} · ${XxtPersonas.names[r.character]||r.provider} · ${r.success?'测试通过':'未通过'}`;
+            const model=document.createElement('small');model.textContent=r.model;
+            description.textContent=r.success?(r.role==='图片'?'已正确识别本次测试图。':'已收到有效的模型回复。'):`${r.title}。${r.reason}`;
+            if(!r.success&&!r.certain){const possible=document.createElement('small');possible.textContent='以上为可能原因，尚未确定唯一原因。';info.append(possible);}
+            info.prepend(label,model,description);row.append(art,info);cast.append(row);
+        }
+        scope.className='xxt-result-scope';scope.textContent='测试只验证本次连接或测试图片，不保证实际题目全对。';close.type='button';close.textContent='知道了';close.autofocus=true;close.onclick=()=>dialog.close();dialog.addEventListener('close',()=>{dialog.remove();button.focus();},{once:true});dialog.append(scope,close);panel.append(dialog);dialog.showModal();
+        if(!matchMedia('(prefers-reduced-motion: reduce)').matches){dialog.animate([{opacity:0},{opacity:1}],{duration:200,easing:'cubic-bezier(0.23,1,0.32,1)'});for(const art of dialog.querySelectorAll('.xxt-result-art'))art.animate(art.closest('[data-result]').dataset.result==='success'?[{opacity:0,transform:'translateY(12px) scale(.92) rotate(-3deg)'},{opacity:1,transform:'translateY(-4px) scale(1.02) rotate(2deg)'},{opacity:1,transform:'translateY(0) scale(1) rotate(0)'}]:[{opacity:0,transform:'translateY(8px) scale(.95)'},{opacity:1,transform:'translateX(-4px) scale(1)'},{opacity:1,transform:'translateX(4px) scale(1)'},{opacity:1,transform:'translateX(0) scale(1)'}],{duration:280,easing:'cubic-bezier(0.23,1,0.32,1)'});}
     }
     function aiSettings(onChange, storageKey = 'xxt-ai-config') {
         const visionSlot = storageKey !== 'xxt-ai-config';
         const A = XxtAi, section = document.createElement('details'); section.dataset[visionSlot ? 'visionSettings' : 'aiSettings'] = 'true';
-        const heading = document.createElement('summary'); heading.textContent = visionSlot ? '图片题专用视觉模型（可选）' : 'AI 接口设置';
+        const heading = document.createElement('summary'); heading.textContent = '添加 / 编辑接口';
         const form = document.createElement('div'); form.className = 'ai-form';
         const fields = {};
         function field(key, label, options) {
@@ -190,57 +113,81 @@
             updateReasoning(''); if (manual) fields.model.focus();
         };
         fields.model.oninput = () => updateReasoning(); fields.protocol.onchange = () => updateReasoning('');
-        for (const [key,label] of [['vision','发送题目截图（须选视觉模型）'],['jsonMode','发送 JSON 模式参数（须接口支持）']]) { field(key,label); fields[key].type = 'checkbox'; }
-        const note = document.createElement('small'); note.textContent = 'API 按服务商用量计费。“测试 AI”会发送一条短请求。Key 保存在油猴存储，非加密保险箱；仅向你配置的 API 发送题目与截图。更换服务商或地址后必须重新输入 Key。';
+        for (const [key,label] of [['vision','图片能力'],['jsonMode','发送 JSON 模式参数（须接口支持）']]) { field(key,label); fields[key].type = 'checkbox'; }
+        fields.vision.closest('label').hidden=true;
+        field('purpose','这个接口用于',[['text','文字题'],['image','图片题'],['both','文字题＋图片题'],['none','仅保存，暂不使用']]);
+        const note = document.createElement('small'); note.textContent = 'API 按服务商用量计费。“测试 AI”会按所选用途发送文字或图片测试请求。Key 保存在油猴存储，非加密保险箱；仅向你配置的 API 发送题目与截图。更换服务商或地址后必须重新输入 Key。';
         const message = document.createElement('small'); message.setAttribute('role','status');
-        function populate() {
-            const c = A.load(storageKey);
+        let editingConfig;
+        function populate(preferred) {
+            const c = preferred?.provider ? preferred : A.load(storageKey);editingConfig=c;
             for (const [key,input] of Object.entries(fields)) { if (key === 'key') { input.value = ''; input.placeholder = c.key ? '已保存，留空保留（同一地址）' : '请输入你自己的密钥'; } else if (input.type === 'checkbox') input.checked = !!c[key]; else input.value = String(c[key] ?? ''); }
             updateModelPicker(c.model); updateReasoning(c.reasoning);
+            const text=vault().selected(c,'text'),image=vault().selected(c,'image');fields.purpose.value=text&&image?'both':image?'image':text?'text':'text';
         }
         fields.provider.onchange = () => { const preset = A.presets[fields.provider.value]; fields.protocol.value = preset.protocol; fields.baseUrl.value = preset.baseUrl; fields.vision.checked = preset.vision; fields.key.value = ''; fields.key.placeholder = '请输入该服务商的密钥'; updateModelPicker(); updateReasoning(''); };
         const controls = document.createElement('div'); controls.className = 'ai-buttons';
         const save = document.createElement('button'); save.type = 'button'; save.textContent = '保存设置'; save.dataset[visionSlot ? 'visionSave' : 'aiSave'] = 'true';
-        save.onclick = () => {
+        save.onclick = async () => {
             try {
                 const c = Object.fromEntries(Object.entries(fields).map(([key,input]) => [key,input.type === 'checkbox' ? input.checked : input.value]));
-                const old = A.load(storageKey);
+                const old = editingConfig || A.load(storageKey);
                 if (!c.key && c.provider === old.provider && c.protocol === old.protocol && c.baseUrl.replace(/\/+$/,'') === old.baseUrl) c.key = old.key;
-                const valid = A.normalize(c); onChange(); vault().save(valid); GM_setValue(storageKey, valid); profilesChanged(); populate(); message.textContent = '已保存至已保存接口。点击“测试 AI”验证（会消耗少量 API 用量）。';
+                const valid = A.normalize(c),purpose=fields.purpose.value;
+                if(['image','both'].includes(purpose)&&!await askImageUse(valid,save))return;
+                onChange();vault().save(valid);
+                vault().assign(valid,'text',['text','both'].includes(purpose));vault().assign(valid,'image',['image','both'].includes(purpose));
+                profilesChanged();populate(valid);fields.purpose.value=purpose;message.textContent=`已保存${purpose==='both'?'，用于文字题和图片题':purpose==='text'?'，用于文字题':purpose==='image'?'，用于图片题':'，暂不使用'}。请点击“测试 AI”验证。`;
             } catch (error) { message.textContent = error.message; }
         };
         const clear = document.createElement('button'); clear.type = 'button'; clear.textContent = '清除密钥';
-        clear.onclick = () => { onChange(); vault().clear(A.load(storageKey)); profilesChanged(); populate(); message.textContent = '已移除当前本地密钥及对应已保存配置；服务商密钥未撤销。'; };
+        clear.onclick = () => { onChange(); vault().clear(editingConfig || A.load(storageKey)); profilesChanged(); populate(); message.textContent = '已移除当前本地密钥及对应已保存配置；服务商密钥未撤销。'; };
         const imageTest=document.createElement('button');imageTest.type='button';imageTest.textContent='测试图片识别（可能计费）';
-        imageTest.onclick=async event=>{onChange();if(GM_getValue('xxt-quiet-enabled',true)&&globalThis.XxtCodexCore.quietHoursAt()){message.textContent='夜间休息中，07:00 后可测试图片识别';return;}const job=A.testImages(A.load(storageKey));imageTest.disabled=true;message.textContent='正在测试随机数字图片…';try{const result=await job.promise;message.textContent=result.message;imageResult(imageTest,result.verified===true,message.textContent,event.detail>0);}catch(error){message.textContent=error.message;if(!/停止|取消|夜间/.test(error.message))imageResult(imageTest,false,message.textContent,event.detail>0);}finally{imageTest.disabled=false;}};
+        imageTest.onclick=async()=>{onChange();if(GM_getValue('xxt-quiet-enabled',true)&&globalThis.XxtCodexCore.quietHoursAt()){message.textContent='夜间休息中，07:00 后可测试图片识别';return;}const config=A.imageConfig();if(!config){message.textContent='请先把一个已保存接口设为“用于图片”。';return;}const job=A.testImages(config);imageTest.disabled=true;message.textContent='正在测试随机数字图片…';try{const result=await job.promise;message.textContent=result.message;testResult(imageTest,{success:result.verified,results:[{role:'图片',provider:config.provider,model:config.model,character:XxtPersonas.character(config),success:result.verified,...(!result.verified?XxtPersonas.explain({code:'IMAGE_MISMATCH'}):{})}]});}catch(error){message.textContent=/停止|取消|夜间/.test(error.message)?error.message:XxtPersonas.explain(error).title;if(!/停止|取消|夜间/.test(error.message))testResult(imageTest,{success:false,results:[{role:'图片',provider:config.provider,model:config.model,character:XxtPersonas.character(config),success:false,...XxtPersonas.explain(error)}]});}finally{imageTest.disabled=false;}};
         form.addEventListener('input',()=>A.cancelImageTest());
         form.addEventListener('change',()=>A.cancelImageTest());
         controls.append(imageTest);
         controls.append(save,clear); form.append(note,controls,message); section.append(heading,form); document.addEventListener('xxt-profiles-changed',populate); populate(); return section;
     }
     function decorate(panel, { title, actions, output, details, runLog, onQuietChange, playbackRate, onRateChange, onAiChange, muted, onMutedChange }) {
+        try{vault().migrate();}catch{}
+        globalThis.XxtPersonaHealth=XxtPersonas.create(GM_getValue,GM_setValue);
         const style = document.createElement('style'); style.textContent = css; document.head.append(style);
         panel.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:2147483647;width:min(360px,calc(100vw - 36px));text-align:left';
         const make = (tag,cls) => { const el = document.createElement(tag); el.className = cls; return el; };
         const shell = make('div','xxt-shell'), header = make('header','xxt-head'), name = document.createElement('div');
+        const brand=make('div','xxt-brand');brand.dataset.modelBrand='true';brand.setAttribute('aria-label','当前模型');header.append(brand);
         const version = make('div','xxt-version'); version.textContent = 'LEARNING ASSISTANT · ' + XxtUpdates.release.version; name.append(title,version);
         const picker = make('div','xxt-skin-picker'); picker.setAttribute('role','group'); picker.setAttribute('aria-label','外观主题');
         const pickerLabel = make('span','xxt-skin-label'); pickerLabel.textContent = '外观'; picker.append(pickerLabel);
         const mascot = make('div','xxt-theme-mascot'); mascot.setAttribute('aria-hidden','true'); mascot.hidden = true;
         const mascotImage = document.createElement('img'); mascotImage.alt = ''; mascotImage.draggable = false; mascot.append(mascotImage);
-        const skins = { default: ['默认','学习助手'], nailoong: ['奶龙','奶龙·学习助手'], naiwa: ['奶蛙','奶蛙·学习助手'] };
-        function applySkin(value, persist = false) {
-            const id = Object.hasOwn(skins,value) ? value : 'default'; panel.dataset.skin = id; title.textContent = skins[id][1];
-            for (const button of picker.querySelectorAll('button')) button.setAttribute('aria-pressed',String(button.dataset.skinChoice === id));
-            const image = id !== 'default' && typeof XxtThemeAssets !== 'undefined' && XxtThemeAssets[id];
-            mascot.hidden = !image;
-            if (image) mascotImage.src = image; else mascotImage.removeAttribute('src');
-            if (persist) GM_setValue('xxt-ui-skin',id);
+        const scene=make('div','xxt-scene-art');scene.setAttribute('aria-hidden','true');
+        const switcher=document.createElement('button'),switchThumb=make('span','xxt-switch-thumb'),switchLabel=document.createElement('span');switcher.className='xxt-theme-switch';switcher.type='button';switcher.dataset.skinChoice='default';switcher.setAttribute('role','switch');switcher.setAttribute('aria-label','默认 / AI 模型主题');switcher.append(switchThumb,switchLabel);picker.append(switcher);
+        const themeFeedback=make('small','xxt-theme-feedback');themeFeedback.setAttribute('role','status');
+        const skins={nailoong:['奶龙','奶龙·学习助手'],naiwa:['奶蛙','奶蛙·学习助手']};
+        let preference=GM_getValue('xxt-ui-preference',GM_getValue('xxt-ui-skin','default')==='default'?'auto':GM_getValue('xxt-ui-skin','default')),painted='';
+        function applySkin(){
+            const config=XxtAi.load(),id=XxtPersonas.character(config),available=!!id&&Object.hasOwn(XxtPersonaAssets,id)&&XxtPersonaHealth.tick()&&GM_getValue('xxt-ai-enabled',!!config.key);
+            const skin=Object.hasOwn(skins,preference)?preference:preference==='auto'&&available?'ai-'+id:'default';
+            panel.dataset.skin=skin;panel.dataset.character=skin.startsWith('ai-')?id:'';
+            switcher.setAttribute('aria-checked',String(skin.startsWith('ai-')));switcher.dataset.selected=String(!Object.hasOwn(skins,preference));switchThumb.textContent=id?({deepseek:'鲸',openai:'GPT',claude:'C',gemini:'✦',zhipu:'Z',kimi:'K',qwen:'Q',doubao:'豆',xiaomi:'mi'}[id]):'AI';switchLabel.textContent=skin.startsWith('ai-')?`${XxtPersonas.names[id]} 主题`:'默认';
+            switcher.title=available?'切换默认 / 已连接 AI 主题':'文字接口测试通过后，可启用对应 AI 主题';
+            const modelName=config.key?(XxtPersonas.names[id]||config.model||'Codex'):'';
+            title.textContent=modelName?`${modelName}·学习助手`:skins[skin]?.[1]||'学习助手';
+            brand.replaceChildren();const icon=id&&config.key&&XxtModelIcons[id];
+            if(icon){const img=document.createElement('img');img.src=icon;img.alt=modelName+' 图标';brand.append(img);const thumb=document.createElement('img');thumb.src=icon;thumb.alt='';switchThumb.replaceChildren(thumb);}else brand.textContent='AI';
+            for(const b of picker.querySelectorAll('[data-skin-choice]:not([role=switch])'))b.setAttribute('aria-pressed',String(b.dataset.skinChoice===skin));
+            themeFeedback.textContent=skin.startsWith('ai-')?'文字接口最近连接成功 · 偶发断连保留主题':preference==='auto'&&!available&&config.key?'测试文字接口后解锁对应 AI 主题':'';
+            if(painted===skin)return;painted=skin;scene.replaceChildren();mascot.replaceChildren();
+            if(skin.startsWith('ai-')){scene.append(figure(id,0));mascot.append(figure(id,1));mascot.hidden=false;}
+            else if(skins[skin]){mascotImage.src=XxtThemeAssets[skin];mascot.append(mascotImage);mascot.hidden=false;}
+            else mascot.hidden=true;
         }
-        for (const [id,[label]] of Object.entries(skins)) {
-            const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.dataset.skinChoice = id;
-            button.onclick = () => applySkin(id,true); picker.append(button);
-        }
+        const persist=()=>{GM_setValue('xxt-ui-preference',preference);GM_setValue('xxt-ui-skin',Object.hasOwn(skins,preference)?preference:'default');applySkin();};
+        switcher.onclick=()=>{preference=Object.hasOwn(skins,preference)?'default':preference==='auto'?'default':'auto';persist();};
+        for(const [id,[label]]of Object.entries(skins)){const b=document.createElement('button');b.type='button';b.textContent=label;b.dataset.skinChoice=id;b.onclick=()=>{preference=preference===id?'default':id;persist();};picker.append(b);}
+        document.addEventListener('xxt-connection-changed',applySkin);document.addEventListener('xxt-profiles-changed',applySkin);const themeTimer=setInterval(applySkin,5000);window.addEventListener('pagehide',()=>clearInterval(themeTimer),{once:true});
         const body = make('div','xxt-body'), fold = make('button','xxt-fold'); fold.textContent = '−'; fold.title = '收起面板';
         fold.onclick = () => { body.hidden = !body.hidden; fold.textContent = body.hidden ? '+' : '−'; fold.title = body.hidden ? '展开面板' : '收起面板'; };
         const status = make('div','xxt-state'); status.textContent = '学习流程 · 多模型接入';
@@ -282,22 +229,20 @@
         }
         mode.value = GM_getValue('xxt-ai-enabled', !!GM_getValue('xxt-ai-config', {})?.key) ? 'on' : 'off';
         const modeNote = document.createElement('p'); modeNote.className = 'xxt-foreground-note';
-        const aiForm = aiSettings(onAiChange), visionForm = aiSettings(onAiChange,'xxt-ai-vision-config');
-        const routingLabel=document.createElement('label'),routing=document.createElement('input');routing.type='checkbox';routing.checked=GM_getValue('xxt-ai-routing',true);routing.dataset.setting='ai-routing';routingLabel.append(routing,document.createTextNode('自动分流：文字题只发文字，图片题才发截图'));
-        routing.onchange=()=>{onAiChange();GM_setValue('xxt-ai-routing',routing.checked);};
-        const visionLabel=document.createElement('label'),visionEnabled=document.createElement('input');visionEnabled.type='checkbox';visionEnabled.checked=GM_getValue('xxt-ai-vision-enabled',false);visionEnabled.dataset.setting='vision-enabled';visionLabel.append(visionEnabled,document.createTextNode('图片题使用单独的视觉模型'));
-        visionEnabled.onchange=()=>{onAiChange();GM_setValue('xxt-ai-vision-enabled',visionEnabled.checked);updateMode();};
-        const routingNote=document.createElement('p');routingNote.textContent='默认模型处理文字题；未启用独立视觉模型时，图片题仍使用默认模型，须支持图片并开启截图。替换字体先尝试还原文字，无法还原的字体和公式才按图片处理。';
-        routingLabel.className=visionLabel.className='xxt-route-control';routingNote.className='xxt-route-note';
+        const aiForm = aiSettings(onAiChange);
+        const routingNote=document.createElement('p');routingNote.className='xxt-route-note';routingNote.textContent='文字题交给文字接口，图片题交给图片接口。没有图片接口时跳过图片题，继续其余任务。';
+        const selectedSummary=make('div','xxt-selected-summary');selectedSummary.dataset.selectedSummary='true';selectedSummary.setAttribute('aria-live','polite');
+        const renderSelected=()=>{selectedSummary.replaceChildren();for(const kind of ['text','image']){const c=kind==='text'?XxtAi.load():XxtAi.imageConfig();const line=document.createElement('p');line.textContent=`${kind==='text'?'文字':'图片'}接口：${c?.key?`${c.model||'Codex'}${(kind==='text'?XxtPersonaHealth.active():GM_getValue('xxt-image-connection',{}).fingerprint===XxtPersonas.fingerprint(c)&&Date.now()-GM_getValue('xxt-image-connection',{}).at<86400000)?' · 最近连接成功':' · 请测试确认'}`:'未选择'}`;selectedSummary.append(line);}};
+        document.addEventListener('xxt-profiles-changed',renderSelected);document.addEventListener('xxt-connection-changed',renderSelected);renderSelected();
         const updateMode = () => {
             const enabled = mode.value === 'on';
             status.textContent = enabled ? '学习流程 · 多模型接入' : '学习流程 · 不接入 AI';
-            visionForm.hidden=!enabled||!visionEnabled.checked; routingLabel.hidden=visionLabel.hidden=routingNote.hidden=!enabled; aiForm.hidden = !enabled;
+            routingNote.hidden=selectedSummary.hidden=!enabled; aiForm.hidden = !enabled;applySkin();
             for (const action of ['connect','solve']) actions.querySelector(`[data-action="${action}"]`).disabled = !enabled;
             modeNote.textContent = enabled ? '使用自己的模型接口作答，测试与答题可能产生 API 费用。' : '无需 Key，直接开始。处理视频、文献和专题；题目记录后跳过，视频弹题可能导致当前视频未完成。';
         };
         mode.onchange = () => { onAiChange(); GM_setValue('xxt-ai-enabled', mode.value === 'on'); updateMode(); output.textContent = '运行模式已保存，点击“开始自动”继续。'; };
-        modeLabel.append(document.createTextNode('运行模式 '),mode); document.addEventListener('xxt-profiles-changed',()=>{visionEnabled.checked=GM_getValue('xxt-ai-vision-enabled',false);updateMode();}); updateMode();
+        modeLabel.append(document.createTextNode('运行模式 '),mode); document.addEventListener('xxt-profiles-changed',updateMode); updateMode();
         const settings = make('div','xxt-settings'), rateLabel = make('label','xxt-rate-setting'), rate = document.createElement('select'); rate.dataset.setting = 'playback-rate'; rate.setAttribute('aria-label','视频倍速');
         for (const value of XxtCodexCore.playbackRates) { const option = document.createElement('option'); option.value = value; option.textContent = value === 1 ? '1×（建议）' : `${value}×`; rate.append(option); }
         rate.value = playbackRate; rate.onchange = () => onRateChange(Number(rate.value)); rateLabel.append(document.createTextNode('视频倍速'),rate);
@@ -307,7 +252,6 @@
         const quiet = document.createElement('input'); quiet.type = 'checkbox'; quiet.dataset.setting = 'quiet'; quiet.checked = GM_getValue('xxt-quiet-enabled',true);
         quiet.onchange = () => { GM_setValue('xxt-quiet-enabled',quiet.checked); onQuietChange(); };
         const quietLabel = document.createElement('label'); quietLabel.append(quiet,document.createTextNode('23:00—07:00 休息'));
-        const motionLabel=document.createElement('label'),motion=document.createElement('input');motion.type='checkbox';motion.checked=GM_getValue('xxt-ui-motion',true);motion.onchange=()=>GM_setValue('xxt-ui-motion',motion.checked);motionLabel.append(motion,document.createTextNode('测试结果动效'));settings.append(motionLabel);
         const duration = document.createElement('span'); duration.textContent = '文档 60 秒 · 专题每项 90 秒'; settings.append(rateLabel,mutedLabel,duration,quietLabel);
         const feedback = make('footer','xxt-feedback'), feedbackLinks = make('div','xxt-feedback-links');
         for (const [label,template] of [['Bug / 问题反馈','bug_report.yml'],['功能建议','feature_request.yml']]) {
@@ -323,13 +267,15 @@
         const authorNote = document.createElement('div'); authorNote.textContent = '脚本根据作者自己的实际使用需求编写，并持续完善。遇到暂不支持的场景，或有希望增加的功能，欢迎及时反馈；作者会第一时间跟进，评估后补充相应设置和功能。';
         feedbackCopy.append(authorNote,feedbackNote,privacyNote); feedbackDetails.append(feedbackSummary,feedbackCopy);
         feedback.append(feedbackLinks,feedbackDetails);
-        actions.className = 'xxt-actions'; body.append(actions,status,statusCard,foregroundNote,modeLabel,modeNote,routingLabel,routingNote,aiForm,visionLabel,visionForm,profileManager(onAiChange),settings,details,...(runLog ? [runLog] : []),XxtUpdates.create({bannerHost:shell}),feedback); header.append(name,fold); shell.append(header,picker,body); panel.replaceChildren(shell,mascot);
-        applySkin(GM_getValue('xxt-ui-skin','default'));
+        const support=document.createElement('a');support.textContent='♥ 支持作者';support.href='https://github.com/Flyer2333/xuexitong-ai-assistant/blob/main/docs/SUPPORT.md';support.target='_blank';support.rel='noopener noreferrer';feedbackLinks.append(support);
+        actions.className = 'xxt-actions'; body.append(actions,status,statusCard,foregroundNote,modeLabel,modeNote,selectedSummary,routingNote,aiForm,profileManager(onAiChange),settings,details,...(runLog ? [runLog] : []),XxtUpdates.create({bannerHost:shell}),feedback); header.append(name,fold); shell.append(scene,header,picker,themeFeedback,body); panel.replaceChildren(shell,mascot);
+        applySkin();
         let drag;
         header.onpointerdown = event => { if (event.button !== 0 || event.target.closest('button')) return; const r = panel.getBoundingClientRect(); drag = {x:event.clientX-r.left,y:event.clientY-r.top}; header.setPointerCapture(event.pointerId); event.preventDefault(); };
-        header.onpointermove = event => { if (!drag) return; const r = panel.getBoundingClientRect(); panel.style.left = `${Math.max(8,Math.min(innerWidth-r.width-8,event.clientX-drag.x))}px`; panel.style.top = `${Math.max(panel.dataset.skin === 'default' ? 8 : 78,Math.min(innerHeight-60,event.clientY-drag.y))}px`; panel.style.right = 'auto'; panel.style.bottom = 'auto'; };
+        header.onpointermove = event => { if (!drag) return; const r = panel.getBoundingClientRect(); panel.style.left = `${Math.max(8,Math.min(innerWidth-r.width-8,event.clientX-drag.x))}px`; panel.style.top = `${Math.max(panel.dataset.character ? 136 : panel.dataset.skin === 'default' ? 8 : 78,Math.min(innerHeight-60,event.clientY-drag.y))}px`; panel.style.right = 'auto'; panel.style.bottom = 'auto'; };
         header.onpointerup = header.onpointercancel = () => { drag = null; };
         return status;
     }
-    globalThis.XxtAssistantTheme = { decorate };
+    globalThis.XxtAssistantTheme = { decorate,testResult,figure };
 })();
+

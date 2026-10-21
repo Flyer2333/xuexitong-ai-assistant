@@ -23,12 +23,13 @@ test('cancel aborts the active batch and never sends the next; later failure ret
  const job=D.run({questions:Array.from({length:9},(_,i)=>q('q'+i))},{base:{},transport:()=>{calls++;return{promise:new Promise((_,r)=>reject=r),abort(){aborted=true;reject(Error('cancelled'));}};}});
  job.abort();await assert.rejects(job.promise);assert(aborted);assert.equal(calls,1);
  calls=0;
- await assert.rejects(D.run({questions:[q('a'),q('b',true)],images:['p'],imageQuestionIds:['b']},{base:{vision:true},transport:()=>({promise:++calls===1?Promise.resolve({answers:[{id:'a'}]}):Promise.reject(Error('failed'))})}).promise,/failed/);
+ await assert.rejects(D.run({questions:[q('a'),q('b',true)],images:['p'],imageQuestionIds:['b']},{base:{vision:true},vision:{key:'image-fixture'},transport:()=>({promise:++calls===1?Promise.resolve({answers:[{id:'a'}]}):Promise.reject(Error('failed'))})}).promise,/failed/);
 });
 test('special fonts and rendered formulas require vision; configured text-only model cannot silently receive images',async()=>{
  assert(D.needsVision({...q('a'),obfuscated:true}));assert(D.needsVision({...q('a'),requiresVision:true}));
  assert(D.needsVision({...q('a'),text:'\ue123'}));
- await assert.rejects(D.run({questions:[q('a',true)],images:['p']},{base:{vision:false},transport:()=>{throw Error('must not call');}}).promise,/视觉模型/);
+ const result=await D.run({questions:[q('a',true)],images:[]},{base:{vision:true},transport:()=>{throw Error('must not call');}}).promise;
+ assert.equal(result.answers.length,0);assert.equal(result.skipped.length,1);assert.match(result.skipped[0].reason,/未配置图片接口/);
 });
 test('diagnostics export only safe fixed labels and bounded numeric facts',()=>{
  const secret='sk-PRIVATE https://private.invalid?q=course student-name';

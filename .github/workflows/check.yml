@@ -8,5 +8,21 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: npm install --ignore-scripts --no-package-lock
+      - run: npx playwright install --with-deps chromium
       - run: npm run build
       - run: npm test
+      - run: npm run test:smoke
+        env:
+          XXT_BROWSER_CHANNEL: chromium
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-smoke-evidence
+          path: |
+            output/playwright/smoke.json
+            output/playwright/notify-render.json
+            artifacts/rich-blanks/observations.json
+            artifacts/two-checks/observations.json
+            artifacts/grade-recovery/observations.json
+            artifacts/quiet-hours/observations.json

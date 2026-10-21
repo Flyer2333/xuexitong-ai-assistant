@@ -40,7 +40,7 @@ try{
   catch(error) { console.error(await page.evaluate(()=>({status:document.querySelector('pre')?.textContent,requests:window.__requests,submits:window.__submits,continues:window.__continues,panel:XxtVideoQuiz.find(document)?.outerHTML,buttons:[...document.querySelectorAll('.tkTopic a')].map(el=>({text:el.textContent,visible:XxtCodexDom.visible(el),style:el.getAttribute('style')}))}))); throw error; }
   await page.locator('[data-action=stop]').click();
   const counts=await page.evaluate(()=>({submits:window.__submits,continues:window.__continues,requests:window.__requests.length}));assert.deepEqual(counts,{submits:1,continues:1,requests:3});
-  if(protocol==='chat') { assert.equal(await page.locator('.xxt-head strong').textContent(),'vision-test·学习助手'); await page.locator('[data-skin-choice=default]').click(); }
+  if(protocol==='chat') { assert.equal(await page.locator('.xxt-head strong').textContent(),'奶龙·学习助手'); await page.locator('[data-skin-choice=default]').click(); }
   assert.equal(await page.locator('.xxt-mascot').count(),0);assert(!(await page.locator('body').textContent()).includes('虹芽'));
   // Changing the destination must not silently reuse the previous provider's secret.
   await settings.locator('summary').click();await settings.locator('[data-ai-field=baseUrl]').fill('https://other.example.invalid/v1');await settings.locator('[data-ai-save]').click();

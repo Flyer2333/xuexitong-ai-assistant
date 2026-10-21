@@ -173,14 +173,15 @@
             panel.dataset.skin=skin;panel.dataset.character=skin.startsWith('ai-')?id:'';
             switcher.setAttribute('aria-checked',String(skin.startsWith('ai-')));switcher.dataset.selected=String(!Object.hasOwn(skins,preference));switchThumb.textContent=id?({deepseek:'鲸',openai:'GPT',claude:'C',gemini:'✦',zhipu:'Z',kimi:'K',qwen:'Q',doubao:'豆',xiaomi:'mi'}[id]):'AI';switchLabel.textContent=skin.startsWith('ai-')?`${XxtPersonas.names[id]} 主题`:'默认';
             switcher.title=available?'切换默认 / 已连接 AI 主题':'文字接口测试通过后，可启用对应 AI 主题';
-            const modelName=config.key?(XxtPersonas.names[id]||config.model||'Codex'):'';
+            const modelName=skin.startsWith('ai-')&&config.key?(XxtPersonas.names[id]||config.model||'Codex'):'';
             title.textContent=modelName?`${modelName}·学习助手`:skins[skin]?.[1]||'学习助手';
             brand.replaceChildren();const icon=id&&config.key&&XxtModelIcons[id];
-            if(icon){const img=document.createElement('img');img.src=icon;img.alt=modelName+' 图标';brand.append(img);const thumb=document.createElement('img');thumb.src=icon;thumb.alt='';switchThumb.replaceChildren(thumb);}else brand.textContent='AI';
+            if(icon&&skin.startsWith('ai-')){const img=document.createElement('img');img.src=icon;img.alt=modelName+' 图标';brand.append(img);}else brand.textContent='AI';
+            if(icon){const thumb=document.createElement('img');thumb.src=icon;thumb.alt='';switchThumb.replaceChildren(thumb);}
             for(const b of picker.querySelectorAll('[data-skin-choice]:not([role=switch])'))b.setAttribute('aria-pressed',String(b.dataset.skinChoice===skin));
             themeFeedback.textContent=skin.startsWith('ai-')?'文字接口最近连接成功 · 偶发断连保留主题':preference==='auto'&&!available&&config.key?'测试文字接口后解锁对应 AI 主题':'';
             if(painted===skin)return;painted=skin;scene.replaceChildren();mascot.replaceChildren();
-            if(skin.startsWith('ai-')){scene.append(figure(id,0));mascot.append(figure(id,1));mascot.hidden=false;}
+            if(skin.startsWith('ai-')){const background=figure(id,0);background.setAttribute('preserveAspectRatio','xMidYMin meet');scene.append(background);mascot.append(figure(id,1));mascot.hidden=false;}
             else if(skins[skin]){mascotImage.src=XxtThemeAssets[skin];mascot.append(mascotImage);mascot.hidden=false;}
             else mascot.hidden=true;
         }
@@ -189,6 +190,7 @@
         for(const [id,[label]]of Object.entries(skins)){const b=document.createElement('button');b.type='button';b.textContent=label;b.dataset.skinChoice=id;b.onclick=()=>{preference=preference===id?'default':id;persist();};picker.append(b);}
         document.addEventListener('xxt-connection-changed',applySkin);document.addEventListener('xxt-profiles-changed',applySkin);const themeTimer=setInterval(applySkin,5000);window.addEventListener('pagehide',()=>clearInterval(themeTimer),{once:true});
         const body = make('div','xxt-body'), fold = make('button','xxt-fold'); fold.textContent = '−'; fold.title = '收起面板';
+        const portraitSpace=make('div','xxt-portrait-space');portraitSpace.setAttribute('aria-hidden','true');
         fold.onclick = () => { body.hidden = !body.hidden; fold.textContent = body.hidden ? '+' : '−'; fold.title = body.hidden ? '展开面板' : '收起面板'; };
         const status = make('div','xxt-state'); status.textContent = '学习流程 · 多模型接入';
         const statusCard=make('section','xxt-status-card');statusCard.dataset.status='idle';statusCard.setAttribute('aria-label','运行状态');
@@ -268,11 +270,12 @@
         feedbackCopy.append(authorNote,feedbackNote,privacyNote); feedbackDetails.append(feedbackSummary,feedbackCopy);
         feedback.append(feedbackLinks,feedbackDetails);
         const support=document.createElement('a');support.textContent='♥ 支持作者';support.href='https://github.com/Flyer2333/xuexitong-ai-assistant/blob/main/docs/SUPPORT.md';support.target='_blank';support.rel='noopener noreferrer';feedbackLinks.append(support);
-        actions.className = 'xxt-actions'; body.append(actions,status,statusCard,foregroundNote,modeLabel,modeNote,selectedSummary,routingNote,aiForm,profileManager(onAiChange),settings,details,...(runLog ? [runLog] : []),XxtUpdates.create({bannerHost:shell}),feedback); header.append(name,fold); shell.append(scene,header,picker,themeFeedback,body); panel.replaceChildren(shell,mascot);
+        actions.className = 'xxt-actions'; body.append(portraitSpace,actions,status,statusCard,foregroundNote,modeLabel,modeNote,selectedSummary,routingNote,aiForm,profileManager(onAiChange),settings,details,...(runLog ? [runLog] : []),XxtUpdates.create({bannerHost:shell}),feedback); header.append(name); shell.append(scene,header,picker,themeFeedback,body); panel.replaceChildren(shell,mascot,fold);
+        const scenePosition=new ResizeObserver(()=>{shell.style.setProperty('--xxt-scene-top',body.offsetTop+'px');fold.style.top=(header.offsetTop+18)+'px';});scenePosition.observe(body);window.addEventListener('pagehide',()=>scenePosition.disconnect(),{once:true});
         applySkin();
         let drag;
         header.onpointerdown = event => { if (event.button !== 0 || event.target.closest('button')) return; const r = panel.getBoundingClientRect(); drag = {x:event.clientX-r.left,y:event.clientY-r.top}; header.setPointerCapture(event.pointerId); event.preventDefault(); };
-        header.onpointermove = event => { if (!drag) return; const r = panel.getBoundingClientRect(); panel.style.left = `${Math.max(8,Math.min(innerWidth-r.width-8,event.clientX-drag.x))}px`; panel.style.top = `${Math.max(panel.dataset.character ? 136 : panel.dataset.skin === 'default' ? 8 : 78,Math.min(innerHeight-60,event.clientY-drag.y))}px`; panel.style.right = 'auto'; panel.style.bottom = 'auto'; };
+        header.onpointermove = event => { if (!drag) return; const r = panel.getBoundingClientRect(); panel.style.left = `${Math.max(8,Math.min(innerWidth-r.width-8,event.clientX-drag.x))}px`; panel.style.top = `${Math.max(panel.dataset.character ? 96 : panel.dataset.skin === 'default' ? 8 : 78,Math.min(innerHeight-60,event.clientY-drag.y))}px`; panel.style.right = 'auto'; panel.style.bottom = 'auto'; };
         header.onpointerup = header.onpointercancel = () => { drag = null; };
         return status;
     }

@@ -62,7 +62,7 @@
         });
     }
     const normalizeQuestionText = value => String(value || '').replace(/^\s*\d+\s*[.、．]?\s*/, '')
-        .replace(/【(?:单选题|多选题|判断题)】/g, '').replace(/\s+/g, '').trim();
+        .replace(/【(?:单选题|多选题|判断题|填空题|简答题|论述题)】/g, '').replace(/\s+/g, '').trim();
     function recallAnswers(questions, learned = []) {
         const answers = [];
         for (const q of questions) {

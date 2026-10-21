@@ -871,9 +871,15 @@
             return;
         }
         const questions = record.lastQuestions || [];
+        if (!result.allCorrect && questions.some(q=>['blank','essay'].includes(q.type))) {
+            const resultEpoch=epoch;
+            await globalThis.XxtFonts?.prepare(document,()=>{beforeClick();if(epoch!==resultEpoch)throw Error('页面已变化，取消旧参考答案');});
+            beforeClick();if(epoch!==resultEpoch||D.readResult(document)?.fingerprint!==result.fingerprint)return;
+        }
         let learned = D.readCorrectAnswers(document, questions);
         if (result.allCorrect && record.lastAnswers?.length === questions.length) learned = questions.map(question => ({
-            question, choices: record.lastAnswers.find(answer => answer.id === question.id)?.choices || []
+            question, choices: record.lastAnswers.find(answer => answer.id === question.id)?.choices || [],
+            ...(record.lastAnswers.find(answer => answer.id === question.id)?.texts ? {texts:record.lastAnswers.find(answer => answer.id === question.id).texts} : {})
         }));
         if (learned.length) {
             record.knownAnswers = [...(record.knownAnswers || []).filter(item => !learned.some(next => next.question.id === item.question.id)), ...learned];

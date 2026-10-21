@@ -1,4 +1,4 @@
-/* Visible DOM adapters; result text follows the user's screenshots, not a live DOM dump. */
+/* Visible DOM adapters; chapter rich blanks follow the observed UEditor DOM contract. */
 (() => {
     const text = el => (globalThis.XxtFonts?.read(el) || el?.textContent || el?.value || '').replace(/\s+/g, ' ').trim();
     const visible = el => !!(el?.isConnected && el.getClientRects().length && el.ownerDocument.defaultView.getComputedStyle(el).visibility !== 'hidden');
@@ -6,6 +6,35 @@
     const buttons = doc => [...doc.querySelectorAll('a,button,[role="button"],input[type="button"],input[type="submit"]')].filter(visible);
     const unique = items => items.length === 1 ? items[0] : null;
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+    // The observed chapter blank UI uses one InpDIV preview and one hidden
+    // answerEditor textarea per blank. Only bind existing UEditor instances.
+    const richFields = new WeakMap();
+    const comparable = value => String(value || '').replace(/\u200b/g,'').replace(/\s+/g,' ').trim();
+    function plainHtml(html, doc) { const t=doc.createElement('template');t.innerHTML=String(html||'');for(const br of t.content.querySelectorAll('br'))br.replaceWith('\n');return comparable(t.content.textContent); }
+    function editorFor(field) {
+        const meta=richFields.get(field);if(!meta)return null;
+        try {
+            const doc=field.ownerDocument,win=typeof unsafeWindow!=='undefined'&&unsafeWindow.document===doc?unsafeWindow:doc.defaultView;
+            const candidates=Object.values(win.UE?.instants||{}).filter(e=>e&&(e.key===field.id||e.textarea===field||e.iframe===meta.frame||e.container?.contains(meta.frame)));
+            return candidates.length===1&&typeof candidates[0].setContent==='function'&&typeof candidates[0].getContent==='function'&&typeof candidates[0].sync==='function'?candidates[0]:null;
+        } catch { return null; }
+    }
+    function fieldValues(field) {
+        const meta=richFields.get(field);if(!meta)return [comparable(field.value)];
+        const e=editorFor(field),values=[plainHtml(field.value,field.ownerDocument),comparable(meta.preview.textContent)];
+        if(e?.isReady)values.push(plainHtml(e.getContent(),field.ownerDocument));
+        return values;
+    }
+    function protectField(field) { const owned=ownedText.get(field);if(fieldValues(field).some(v=>(v&&v!==owned)||(owned!==undefined&&v!==owned)))throw Error('检测到已有或手动输入，保留内容并取消自动提交'); }
+    async function readyRich(field,guard) {
+        const m=richFields.get(field);protectField(field);guard();
+        if(!enabled(m.item)||field.disabled||field.readOnly)throw Error('填空输入框不可编辑，记录后继续');
+        let e=editorFor(field);if(!e?.isReady)m.preview.click();
+        const since=Date.now();
+        while(!(e=editorFor(field))?.isReady||!e.body){guard();if(!field.isConnected||Date.now()-since>4000)throw Error('填空编辑器未能就绪，记录后继续');await delay(50);}
+        if(e.options?.readonly||e.body.contentEditable==='false')throw Error('填空编辑器不可编辑，记录后继续');
+        guard();protectField(field);return e;
+    }
     const imageSource = img => img.getAttribute('data-original') || img.getAttribute('data-src') || img.currentSrc || img.getAttribute('src') || '';
     const contentVisuals = (el,selector) => [...(el?.querySelectorAll(selector)||[])].filter(node=>!node.closest('button,[role="button"],[aria-hidden="true"],script,style,.cx-ai-ignore'));
     const hasRenderedVisual = el => contentVisuals(el,'canvas,svg,math,iframe,.MathJax,.katex').length>0;
@@ -33,9 +62,14 @@
         return [...doc.querySelectorAll('.TiMu')].filter(el => !el.parentElement?.closest('.TiMu')).map((el, index) => {
             const kind = text(el.querySelector('.newZy_TItle'));
             let type = kind.includes('多选题') ? 'multiple' : kind.includes('判断题') ? 'boolean' : kind.includes('单选题') ? 'single' : kind.includes('填空题') ? 'blank' : /简答题|论述题/.test(kind) ? 'essay' : 'unsupported';
-            const fields = [...el.querySelectorAll('textarea,input[type="text"],input:not([type])')].filter(enabled);
+            let fields = [...el.querySelectorAll('textarea,input[type="text"],input:not([type])')].filter(enabled);
             const isText = ['blank','essay'].includes(type);
-            if (isText && (!fields.length || fields.length>20 || (type==='essay'&&fields.length!==1) || el.querySelector('[contenteditable="true"],iframe'))) type='unsupported';
+            const items=type==='blank'?[...el.querySelectorAll('.Zy_ulTk .blankItemDiv')]:[];
+            if(items.length){
+                const mapped=items.map(item=>{const inputs=[...item.querySelectorAll('textarea[id^="answerEditor"]')],previews=[...item.querySelectorAll('.InpDIV')],frames=[...item.querySelectorAll('.textDIV iframe')];if(inputs.length!==1||previews.length!==1||frames.length!==1||!visible(item))return null;richFields.set(inputs[0],{preview:previews[0],frame:frames[0],item});return inputs[0];});
+                if(mapped.every(Boolean)&&new Set(mapped).size===items.length)fields=mapped;else type='unsupported';
+            }
+            if (isText && (!fields.length || fields.length>20 || (type==='essay'&&fields.length!==1) || (!items.length&&el.querySelector('[contenteditable="true"],iframe')))) type='unsupported';
             const rows = [...el.querySelectorAll('.Zy_ulTop > li')];
             const choiceClass = el.querySelector('[class*="choice"]')?.className.match(/\bchoice(\d+)\b/);
             return { element: el, rows, fields, question: {
@@ -108,9 +142,10 @@
                 XxtCodexCore.normalizeQuestionText(q.text) === XxtCodexCore.normalizeQuestionText(title));
             if (matches.length !== 1) continue;
             const question = matches[0];
+            if (['blank','essay'].includes(question.type)&&globalThis.XxtFonts?.obfuscated(block)) continue;
             const values = [...block.querySelectorAll('p,div,span,label,strong')].filter(el => visible(el) &&
                 !el.closest('.Zy_TItle,.Zy_ulTop,[data-xxt-codex-panel]')).map(el => {
-                const match = text(el).match(/^(?:(?:正确|参考|标准)答案|答案)\s*[:：]\s*([^:：]+?)(?=我的答案|你的答案|答案解析|解析|得分|$)/);
+                const match = text(el).match(/^(?:(?:正确|参考|标准)答案|答案)\s*[:：]\s*([\s\S]+?)(?=我的答案|你的答案|答案解析|解析|得分|$)/);
                 return match?.[1]?.trim();
             }).filter(Boolean);
             const found = [];
@@ -129,6 +164,20 @@
             }
             const distinct = [...new Set(found)];
             if (distinct.length === 1) learned.push({ question, choices: [...distinct[0]] });
+            if (['blank','essay'].includes(question.type)) {
+                const candidates=[];
+                for(const value of values){
+                    let texts;
+                    const ordinal=s=>/^\d+$/.test(s)?Number(s):s==='十'?10:s.includes('十')?(Number('一二三四五六七八九'.indexOf(s[0])+1)||1)*10+('一二三四五六七八九'.indexOf(s.split('十')[1])+1):'一二三四五六七八九'.indexOf(s)+1;
+                    let numbered=[...value.matchAll(/第\s*([\d一二三四五六七八九十]+)\s*空\s*[:：]\s*([\s\S]*?)(?=第\s*[\d一二三四五六七八九十]+\s*空\s*[:：]|$)/g)];
+                    if(!numbered.length)numbered=[...value.matchAll(/[（(](\d+)[）)]\s*([\s\S]*?)(?=[（(]\d+[）)]|$)/g)];
+                    if(numbered.length===question.slots&&numbered.every((m,i)=>ordinal(m[1])===i+1))texts=numbered.map(m=>m[2].trim());
+                    else if(question.slots===1&&!numbered.length)texts=[value];
+                    if(texts?.length===question.slots&&texts.every(t=>t&&t.length<=8000))candidates.push(texts);
+                }
+                const uniqueTexts=[...new Map(candidates.map(t=>[JSON.stringify(t),t])).values()];
+                if(uniqueTexts.length===1)learned.push({question,texts:uniqueTexts[0]});
+            }
         }
         return learned;
     }
@@ -157,7 +206,7 @@
         for (const entry of entries) if (entry.fields?.length) {
             const answer=answers.find(a=>a.id===entry.question.id);
             if (!answer?.texts || entry.fields.length!==answer.texts.length) throw new Error('文本答案与输入框不一致');
-            for (const field of entry.fields) if (field.value && field.value !== ownedText.get(field)) throw new Error('检测到已有或手动输入，保留内容并取消自动提交');
+            for (const field of entry.fields) { protectField(field);if(richFields.has(field))await readyRich(field,assertCurrent); }
         }
         for (const entry of entries) if (entry.rows.length) {
             const current=entry.rows.map((row,i)=>selected(row)?entry.question.options[i].key:'').join('');
@@ -170,9 +219,20 @@
             if (['blank','essay'].includes(entry.question.type)) {
                 for (let i=0;i<entry.fields.length;i++) {
                     assertCurrent();const field=entry.fields[i];
-                    if (!enabled(field) || field.readOnly || (field.value && field.value !== ownedText.get(field))) throw new Error('输入框已变化或包含手动输入，取消提交');
+                    protectField(field);
+                    if(richFields.has(field)){
+                        const editor=await readyRich(field,assertCurrent),value=answer.texts[i],html='<p>'+value.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\r?\n/g,'<br>')+'</p>';
+                        assertCurrent();editor.setContent(html);editor.fireEvent?.('contentChange');editor.sync();assertCurrent();
+                        const actual=editor.getContent();if(plainHtml(actual,field.ownerDocument)!==comparable(value))throw Error('填空编辑器未保留完整答案，取消提交');
+                        Object.getOwnPropertyDescriptor(field.ownerDocument.defaultView.HTMLTextAreaElement.prototype,'value').set.call(field,actual);
+                        field.dispatchEvent(new Event('input',{bubbles:true}));field.dispatchEvent(new Event('change',{bubbles:true}));
+                        ownedText.set(field,comparable(value));protectField(field);
+                        if(comparable(richFields.get(field).preview.textContent)!==comparable(value))throw Error('填空预览未同步，取消提交');
+                        continue;
+                    }
+                    if (!enabled(field) || field.readOnly) throw new Error('输入框已变化或包含手动输入，取消提交');
                     const prototype=field.tagName==='TEXTAREA'?field.ownerDocument.defaultView.HTMLTextAreaElement.prototype:field.ownerDocument.defaultView.HTMLInputElement.prototype;
-                    Object.getOwnPropertyDescriptor(prototype,'value').set.call(field,answer.texts[i]);ownedText.set(field,answer.texts[i]);
+                    Object.getOwnPropertyDescriptor(prototype,'value').set.call(field,answer.texts[i]);ownedText.set(field,comparable(answer.texts[i]));
                     field.dispatchEvent(new Event('input',{bubbles:true}));field.dispatchEvent(new Event('change',{bubbles:true}));
                     assertCurrent();if(field.value!==answer.texts[i])throw new Error('文本答案未正确写入，取消提交');
                 }
@@ -193,6 +253,7 @@
             if (actual.join(',') !== [...answer.choices].sort().join(',')) throw new Error(`题目 ${entry.question.id} 未正确选中，取消提交`);
             ownedChoices.set(entry.element,entry.rows.map((row,i)=>selected(row)?entry.question.options[i].key:'').join(''));
         }
+        assertCurrent();for(const entry of entries)for(const field of entry.fields||[]){if(!field.isConnected)throw Error('输入框已变化，取消提交');protectField(field);}
     }
     const ownedText = new WeakMap();
     const ownedChoices = new WeakMap();

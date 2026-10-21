@@ -2,6 +2,7 @@
  'use strict';
  const names={deepseek:'DeepSeek',openai:'GPT',claude:'Claude',gemini:'Gemini',zhipu:'GLM',kimi:'Kimi',qwen:'千问',doubao:'豆包',xiaomi:'MiMo'};
  function character(c={}){
+  if(c.protocol==='codex'||c.provider==='codex')return 'openai';
   const id=String(c.model||'').toLowerCase();
   for(const [pattern,name] of [[/deepseek/,'deepseek'],[/claude/,'claude'],[/gemini/,'gemini'],[/\b(?:gpt|o[134])[-/\d]|codex/,'openai'],[/glm/,'zhipu'],[/kimi|moonshot/,'kimi'],[/qwen|qwq/,'qwen'],[/doubao|seed/,'doubao'],[/mimo/,'xiaomi']])if(pattern.test(id))return name;
   return Object.hasOwn(names,c.provider)&&!['custom','siliconflow'].includes(c.provider)?c.provider:null;
@@ -9,6 +10,7 @@
  function fingerprint(c={}){let h=2166136261;const text=JSON.stringify([c.provider,c.protocol,c.baseUrl,c.model,c.key]);for(const ch of text)h=Math.imul(h^ch.charCodeAt(0),16777619);return (h>>>0).toString(16);}
  function explain(error={}){
   const code=String(error.code||'').toLowerCase(),status=Number(error.status)||0;
+  if(code==='local_image_test_unavailable')return {title:'本地服务没有图片测试入口',reason:'请更新本地服务源码、重启 PowerShell，并核对本地服务地址；仅更新油猴脚本不会更新电脑上的服务。',certain:true};
   if(/model_not_found|invalid_model|model_not_exist|model_not_supported/.test(code))return {title:'模型 ID 不存在或不可用',reason:'接口明确拒绝了这个模型 ID，请从服务商控制台复制可用 ID。',certain:true};
   if(/insufficient|balance|quota_exceeded/.test(code)||status===402)return {title:'账户余额或额度不足',reason:'请检查服务商余额、套餐额度及该模型的调用权限。',certain:true};
   if(status===401)return {title:'密钥验证未通过',reason:'服务商返回 401，请检查密钥是否正确、过期或已被撤销。',certain:true};

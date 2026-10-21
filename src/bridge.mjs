@@ -102,8 +102,8 @@ const server = http.createServer(async (req, res) => {
         if (!allowed) return send(res, 403, { error: '来源无效' });
     }
     if (req.headers.authorization !== `Bearer ${token}`) return send(res, 401, { error: '本地连接码无效' });
-    if (req.method === 'GET' && req.url === '/health') return send(res, 200, { ok: true, busy, version: '0.2.0', autoSubmitReady: true, model, reasoningEffort, uncertainAnswers: true });
-    if (req.method !== 'POST' || req.url !== '/solve') return send(res, 404, { error: '未提供此接口' });
+    if (req.method === 'GET' && req.url === '/health') return send(res, 200, { ok: true, busy, version: '0.3.0', autoSubmitReady: true, model, reasoningEffort, uncertainAnswers: true, imageTestReady: true });
+    if (req.method !== 'POST' || !['/solve','/image-test'].includes(req.url)) return send(res, 404, { error: '未提供此接口' });
     if (!/^application\/json\b/.test(req.headers['content-type'] || '')) return send(res, 415, { error: '需要 JSON 请求' });
     if (busy) return send(res, 409, { error: 'Codex 正在处理另一份练习' });
     busy = true;
@@ -119,7 +119,12 @@ const server = http.createServer(async (req, res) => {
             chunks.push(chunk);
         }
         const payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-        send(res, 200, await solve(payload, controller.signal));
+        if(req.url==='/image-test'){
+            if(!Array.isArray(payload.images)||payload.images.length!==1)throw new Error('图片测试需要一张 PNG');
+            const result=await solve({questions:[{id:'image-probe',type:'blank',text:'请识别图片中的六位数字，保留前导零；只将数字填写在一个输入框中。',options:[],slots:1,requiresVision:true}],images:payload.images,imageManifest:[{image:1,questionIds:['image-probe']}]},controller.signal);
+            const answer=result.answers[0],code=answer.readable&&answer.confidence>=0.8?answer.texts[0].trim():'';
+            send(res,200,{code:/^\d{6}$/.test(code)?code:'',model,reasoningEffort});
+        }else send(res, 200, await solve(payload, controller.signal));
     } catch (error) {
         console.error(error.message);
         send(res, 422, { error: controller.signal.aborted ? 'Codex 调用超时或请求已取消' : error.message });

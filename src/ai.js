@@ -46,7 +46,7 @@
     }
     function build(config, payload, probe = false) {
         const c = normalize(config), headers = { 'Content-Type': 'application/json' };
-        if (c.protocol === 'codex' && payload?.imageChallenge) throw new Error('Codex 桥接暂不支持独立图片能力测试');
+        if (c.protocol === 'codex' && payload?.imageChallenge) return { url: c.baseUrl + '/image-test', method: 'POST', headers: { ...headers, Authorization: `Bearer ${c.key}` }, body: { images: payload.images }, protocol: c.protocol };
         if (c.protocol === 'codex') return { url: c.baseUrl + (probe ? '/health' : '/solve'), method: probe ? 'GET' : 'POST', headers: { ...headers, Authorization: `Bearer ${c.key}` }, body: probe ? undefined : payload, protocol: c.protocol };
         const text = payload?.imageChallenge ? '只识别图片中的六位数字，保留前导零。只返回 JSON：{"code":"六位数字"}。不要解释。' : probe ? '只回复 JSON：{"ok":true}。这是连接测试。' : prompt(payload, c.vision);
         const images = probe || !c.vision ? [] : payload.images || [];
@@ -87,9 +87,17 @@
         if (/\/(chat\/completions|responses|messages)$|:generateContent$/.test(c.baseUrl)) throw new Error('请填写 Base URL，不要包含 chat/completions、responses 等具体接口路径');
         return { url: c.baseUrl + suffix, method: 'POST', headers, body, protocol: c.protocol };
     }
+    function localMetadata(data) {
+        const result={};
+        if(typeof data.model==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,199}$/.test(data.model))result.model=data.model;
+        if(typeof data.reasoningEffort==='string'&&/^[a-z][a-z0-9_-]{0,31}$/.test(data.reasoningEffort))result.reasoningEffort=data.reasoningEffort;
+        if(typeof data.imageTestReady==='boolean')result.imageTestReady=data.imageTestReady;
+        return result;
+    }
     function parse(protocol, data, questions, probe = false, imageTest = false) {
         if (protocol === 'codex') {
-            if (probe) { if (!data.ok) throw new Error('本地服务未就绪'); return { ok: true }; }
+            if (probe) { if (!data.ok) throw new Error('本地服务未就绪'); return { ok: true, kind: 'health', ...localMetadata(data) }; }
+            if (imageTest) return {code:typeof data.code==='string'&&/^\d{6}$/.test(data.code)?data.code:'',...localMetadata(data)};
             return { answers: root.XxtCodexCore.validateAnswers(questions, data, { allowUncertain: true }) };
         }
         if (data.status === 'incomplete') throw new Error('模型输出未完成，请增加输出上限或降低推理强度');
@@ -138,12 +146,12 @@
                                 const error=new Error(({400:'API 参数或模型不兼容',401:'API Key 或连接码无效',403:'API 权限或地区限制',404:'模型或接口地址不存在',429:'触发速率限制或余额不足'})[response.status]||`API 返回 HTTP ${response.status}`);error.status=response.status;
                                 try{const body=JSON.parse(response.responseText.slice(0,65536)),code=body.error?.code||body.error?.type||body.code;if(typeof code==='string'&&/^[a-zA-Z0-9_.-]{1,80}$/.test(code))error.code=code;
                                     if(/model.{0,50}(?:does not exist|not found|not exist)|模型.{0,20}不存在/i.test(String(body.error?.message||'')))error.code='model_not_found';
-                                }catch{}throw error;
+                                }catch{}if(imageTest&&c.protocol==='codex'&&response.status===404)error.code='LOCAL_IMAGE_TEST_UNAVAILABLE';throw error;
                             }
                             if (response.responseText.length > 8 * 1024 * 1024) throw new Error('API 响应过大');
                             let data; try { data = JSON.parse(response.responseText); } catch { throw new Error('API 返回非 JSON，请检查地址或网络'); }
                             const result=parse(spec.protocol, data, payload?.questions, probe, imageTest);
-                            try{root.XxtProfiles?.create(GM_getValue,GM_setValue).markUsed(c);}catch{}
+                            try{if(!(c.protocol==='codex'&&probe))root.XxtProfiles?.create(GM_getValue,GM_setValue).markUsed(c);}catch{}
                             if(!c.vision)root.XxtPersonaHealth?.success(c);
                             root.document?.dispatchEvent(new Event('xxt-connection-changed'));
                             resolve(result);
@@ -168,12 +176,20 @@
     function testSelected(){
         let active,cancelled=false;
         const promise=(async()=>{
-            const text=load(),image=imageConfig(),results=[];
+            const text=load(),image=imageConfig(),results=[],localChecks=new Map();
             const tasks=[];if(text.key)tasks.push({role:'文字',config:{...text,vision:false}});if(image)tasks.push({role:'图片',config:image});
             if(!tasks.length)throw Error('请先保存接口，并选择用于文字或图片。');
             for(const task of tasks){
                 if(cancelled)throw Error('已停止本次 AI 测试');
-                try{active=task.role==='图片'?testImages(task.config):transport(task.config,'/health');const result=await active.promise;
+                try{
+                    if(task.config.protocol==='codex'){
+                        const identity=JSON.stringify([task.config.baseUrl,task.config.key]);
+                        let checked=localChecks.get(identity);
+                        if(!checked){active=transport({...task.config,vision:false},'/health');checked=await active.promise;localChecks.set(identity,checked);}
+                        results.push({role:task.role,provider:task.config.provider,model:checked.model||task.config.model,reasoningEffort:checked.reasoningEffort,character:root.XxtPersonas?.character(task.config),success:true,kind:'health',imageTestReady:checked.imageTestReady===true});
+                        continue;
+                    }
+                    active=task.role==='图片'?testImages(task.config):transport(task.config,'/health');const result=await active.promise;
                     if(task.role==='图片'&&!result.verified){const error=Error(result.message);error.code='IMAGE_MISMATCH';throw error;}
                     results.push({role:task.role,provider:task.config.provider,model:task.config.model,character:root.XxtPersonas?.character(task.config),success:true});
                 }catch(error){if(cancelled||/停止|取消/.test(error.message))throw error;results.push({role:task.role,provider:task.config.provider,model:task.config.model,character:root.XxtPersonas?.character(task.config),success:false,...root.XxtPersonas.explain(error)});}
@@ -196,7 +212,7 @@
             job=transport({...config,vision:true},'/image-test',{imageChallenge:true,images:[canvas.toDataURL('image/png')]});
             const result=await job.promise;
             if(cancelled) throw new Error('图片测试已取消');
-            if(result?.code!==code) return {verified:false,message:'未能正确识别测试图，图片能力尚未确认'};
+            if(result?.code!==code) return {verified:false,message:'未能正确识别测试图，图片能力尚未确认',...(config.protocol==='codex'?localMetadata(result):{})};
             const raw=JSON.stringify([config.provider,config.protocol,config.baseUrl,config.model,config.key]);
             const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(raw));
             const fingerprint=[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('');
@@ -204,7 +220,7 @@
             GM_setValue('xxt-image-capability',{fingerprint,at:Date.now(),verified:true});
             if(root.XxtPersonas)GM_setValue('xxt-image-connection',{fingerprint:root.XxtPersonas.fingerprint(config),at:Date.now()});
             root.document?.dispatchEvent(new Event('xxt-connection-changed'));
-            return {verified:true,message:'随机数字图片识别通过；不代表所有复杂图片都能正确作答'};
+            return {verified:true,message:'随机数字图片识别通过；不代表所有复杂图片都能正确作答',...(config.protocol==='codex'?localMetadata(result):{})};
         })();
         imageProbe = {promise,abort(){cancelled=true;job?.abort();}};
         return imageProbe;

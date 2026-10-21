@@ -15,6 +15,7 @@ test('connection theme waits through transient errors; repeated failures respect
  h.success(c);assert(h.active());data['xxt-ai-config']={...c,key:'different-fixture'};assert(!h.active());h.success(c);assert(!h.active());
 });
 test('provider and model names identify hosted model family, unsupported characters remain absent; errors never repeat arbitrary server contents',()=>{
+ assert.equal(P.character({provider:'codex',protocol:'codex',model:''}),'openai');assert.equal(P.character({provider:'custom',protocol:'codex',model:''}),'openai');
  assert.equal(P.character({provider:'siliconflow',model:'deepseek-ai/DeepSeek-V3'}),'deepseek');assert.equal(P.character({provider:'custom',model:'claude-opus-4-6'}),'claude');assert.equal(P.character({provider:'custom',model:'unidentified-model'}),null);
  assert(P.explain({code:'model_not_found'}).certain);assert(!P.explain({status:404}).certain);assert(!P.explain({message:'sensitive arbitrary response'}).reason.includes('sensitive'));
 });

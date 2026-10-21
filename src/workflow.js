@@ -115,17 +115,33 @@
         const work = params.get('workId') || params.get('workid') || params.get('jobid') || '';
         return `local/${tabId || nonce}/${location.origin}/${work || location.pathname}/${D.extract(document).map(entry => entry.question.id).join(',')}`;
     }
+    let renderedSkipList, renderedSkipSignature;
     function notify(value) {
         messageValue = value;
-        if (panel) panel.querySelector('pre').textContent = value;
-        if (themeStatus) { const sleep = /夜间休息|已预约/.test(value); themeStatus.textContent = sleep ? '夜间休息 · 北京时间' : (aiEnabled() ? '学习流程 · 多模型接入' : '学习流程 · 不接入 AI'); panel.dataset.sleeping = String(sleep); }
+        const output = panel?.querySelector('pre');
+        if (output && output.textContent !== value) output.textContent = value;
+        // Configuration and sleep state can change while the output stays the same.
+        if (themeStatus) {
+            const sleep = /夜间休息|已预约/.test(value);
+            const status = sleep ? '夜间休息 · 北京时间' : (aiEnabled() ? '学习流程 · 多模型接入' : '学习流程 · 不接入 AI');
+            if (themeStatus.textContent !== status) themeStatus.textContent = status;
+            if (panel.dataset.sleeping !== String(sleep)) panel.dataset.sleeping = String(sleep);
+        }
         const log = panel?.querySelector('[data-skipped-log]');
         if (log) {
+            // Read current storage on every notification, including other frames' edits.
             const entries = GM_getValue(`xxt-skipped:${autoKey}`, []) || [];
-            log.querySelector('summary').textContent = `跳过记录 · ${entries.filter(x=>x.status!=='reviewed').length} 项待复核`;
-            const list = log.querySelector('ul'); list.replaceChildren();
-            for (const entry of entries.slice(-20)) { const item = document.createElement('li'); item.textContent = `${entry.status==='reviewed'?'[已复核] ':''}${entry.chapter}：${entry.reason}`; list.append(item); }
+            const summary = log.querySelector('summary'), title = `跳过记录 · ${entries.filter(x=>x.status!=='reviewed').length} 项待复核`;
+            if (summary.textContent !== title) summary.textContent = title;
+            const list = log.querySelector('ul');
+            const rows = entries.slice(-20).map(entry => `${entry.status==='reviewed'?'[已复核] ':''}${entry.chapter}：${entry.reason}`);
+            const signature = JSON.stringify(rows);
+            if (list !== renderedSkipList || signature !== renderedSkipSignature) {
+                list.replaceChildren(...rows.map(text => { const item = document.createElement('li'); item.textContent = text; return item; }));
+                renderedSkipList = list; renderedSkipSignature = signature;
+            }
         }
+        // Status synchronization is independent of local rendering; keep every message.
         if (coordinator && !coursePage()) post(coordinator, 'status', { task, value });
     }
     function showApiFailure(wasAutomatic) {

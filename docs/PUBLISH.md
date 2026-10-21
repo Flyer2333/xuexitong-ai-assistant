@@ -87,6 +87,17 @@ XXT_BROWSER_CHANNEL=chromium npm run test:browser
 
 PowerShell 使用 `$env:XXT_BROWSER_CHANNEL = 'chromium'` 再执行命令。测试结果写入项目 `artifacts/`，该目录被 Git 忽略。默认测试使用模拟网站和模型，不需要真实 Key，也不会向真实课程提交答案；服务商账号与实际课程需要另外验证。
 
+关键隔离浏览器回归统一入口（先构建）：
+
+```sh
+npm run build
+XXT_BROWSER_CHANNEL=chromium npm run test:smoke
+```
+
+smoke 复用富文本填空与标准答案重做、同章双测验、提交后成绩恢复、停止/夜间取消四组脚本，并检查状态渲染去重。普通启动与持久上下文都遵循 `XXT_BROWSER_CHANNEL`，不修改调用者传入的选项。CI 使用固定版本的 Playwright，安装 Chromium 和系统依赖后运行 build、npm test、smoke，并上传观察记录。只配置 CI 或本地运行成功不等于远端 CI 已通过。
+
+`npm run test:notify` 单独运行渲染指标与边界检查，输出 `output/playwright/notify-render.json`；smoke 汇总在 `output/playwright/smoke.json`。其余复用脚本仍保留原 `artifacts/` 观察记录。前后测量可通过 `XXT_NOTIFY_BUNDLE` 指定冻结构建、`XXT_NOTIFY_OUTPUT` 指定输出，旧版设 `XXT_NOTIFY_BASELINE=1` 仅免除去重次数断言，功能和状态消息断言仍执行。测试只在注入的副本中暴露私有入口，不给安装脚本增加调试接口；每次读取当前存储，统计 DOM 写入，不以此推算实课速度、内存或费用。
+
 ## 每次更新时维护说明
 
 - 新增功能同时写入 README 最前面的“产品功能”和完整功能说明，讲清操作方式与限制。

@@ -80,17 +80,171 @@
 
 ## 可选：连接电脑上的 Codex
 
-使用 API 的用户可以跳过这一节。连接 Codex 需要电脑已安装 Node.js 和可用的 Codex CLI，并完成 CLI 登录。
+**已配置 API 的用户可以跳过这一节。** 下面以 Windows 为例，教你把浏览器脚本连到本机的 Codex CLI。
 
-1. 点击[下载本地服务 ZIP](https://github.com/Flyer2333/xuexitong-ai-assistant/archive/refs/heads/main.zip)。浏览器下载完成后，在下载列表中点“在文件夹中显示”，找到 `xuexitong-ai-assistant-main.zip`。
-2. 右键 ZIP → **全部解压**，打开解压出的 `xuexitong-ai-assistant-main` 文件夹。能看到 `package.json`、`src` 和 `docs` 的这一层，就是下面要使用的文件夹；如果只有一个同名文件夹，再点进去一层。在资源管理器地址栏输入 `powershell` 并回车，打开位于此文件夹的终端；运行 `npm run start:codex`，不要关闭这个终端。
-3. 首次启动会生成 `src/local/bridge-token.txt`。打开该文件，将连接码复制到脚本设置中。连接码用于验证本机访问，不要上传或分享。
-4. 面板选择“本地 Codex”，Base URL 保持 `http://127.0.0.1:18763`，把连接码填入 Key 栏并保存。
-5. 点击“测试 AI”，确认本地服务可以连接后再开始。此测试不会调用模型，不能单独确认 CLI 登录和模型调用是否正常。
+连接过程是：**浏览器脚本 → 本地连接服务 → Codex CLI**。你需要先在电脑上启动本地服务，再把服务的地址和连接码填进脚本；使用期间保持服务窗口打开。
 
-如果服务找不到 Codex，设置环境变量 `XXT_CODEX_BIN`，填入电脑上 Codex CLI 的原生可执行文件路径，再重新启动服务。Windows 下不要填写无法直接执行的 `.cmd` 包装器路径。
+### 第 1 步：确认电脑具备运行条件
 
-可通过 `XXT_CODEX_MODEL` 和 `XXT_CODEX_REASONING` 指定 CLI 的模型与推理强度，留空则使用 CLI 默认设置。面板中的 API 模型和推理选项不改变 Codex 服务配置。修改环境变量后需重启服务。服务只监听本机回环地址，默认端口 18763；修改 `XXT_CODEX_PORT` 后，请同步修改面板地址。
+需要安装 **Node.js 20.11 或更高版本**（含 npm），以及已经登录的 **Codex CLI（命令行版）**。仅安装或登录桌面版 Codex，还不能确认命令行版可用。
+
+打开 PowerShell，逐行输入以下命令，每行输完按回车：
+
+```powershell
+node --version
+npm --version
+codex --version
+codex login status
+```
+
+前三条应显示版本号，最后一条应显示已登录状态。如果提示找不到命令，先完成对应安装：[Node.js 下载](https://nodejs.org/zh-cn/download)、[Codex CLI 安装说明](https://learn.chatgpt.com/docs/codex/cli)。安装后关闭并重新打开 PowerShell，再检查一次。
+
+如果 Codex 尚未登录，运行 `codex login`，按提示完成登录后，再运行 `codex login status` 核对。具体登录方式见 [Codex 官方登录说明](https://learn.chatgpt.com/docs/auth)。这几条检查命令不会发送答题请求。
+
+### 第 2 步：下载、解压，找到有 package.json 的文件夹
+
+1. 点击 **[下载本地服务 ZIP](https://github.com/Flyer2333/xuexitong-ai-assistant/archive/refs/heads/main.zip)**。下载完成后，在浏览器下载列表中点“在文件夹中显示”，找到 `xuexitong-ai-assistant-main.zip`。
+2. 右键 ZIP → **全部解压**，选择电脑上方便找到的位置，例如 D 盘的一个文件夹。不要直接在 ZIP 预览窗口里操作。
+3. 打开解压出的文件夹，找到下面这一层。**`package.json`、`src` 和 `docs` 必须能在同一个窗口里看到。** 如果里面只有一个同名文件夹，再双击进去一层。
+
+```text
+xuexitong-ai-assistant-main
+├─ package.json     ← 找到这个文件，停在这一层
+├─ src
+├─ docs
+└─ …
+```
+
+如果 Windows 隐藏了文件扩展名，`package.json` 可能只显示为 `package`。可在资源管理器中开启“查看 → 显示 → 文件扩展名”。
+
+### 第 3 步：从这个文件夹打开 PowerShell，并核对位置
+
+保持第 2 步的文件夹窗口打开，按 `Alt+D` 选中顶部的**地址栏**，输入 `powershell`，再按回车。这里输入的是地址栏，不是右侧的搜索框。
+
+在新打开的 PowerShell 窗口中，先运行：
+
+```powershell
+Test-Path .\package.json
+```
+
+**看到 `True` 才继续下一步。** 如果显示 `False`，说明终端所在位置不对：回到第 2 步，找到有 `package.json` 的那一层，再从地址栏打开 PowerShell。
+
+> 如果提示符是 `PS C:\>`，不要直接运行启动命令。npm 会在终端当前文件夹中查找 `package.json`；找不到时，就会报你截图中的 `ENOENT`、`C:\package.json` 错误。只复制下方代码框内的命令，不要把 `PS …>` 一起复制。
+
+### 第 4 步：启动本地服务，确认启动成功
+
+在刚才返回 `True` 的同一个窗口中运行：
+
+```powershell
+npm run start:codex
+```
+
+此服务使用 Node.js 自带模块，按本教程启动无需先运行 `npm install`。
+
+启动成功后，终端应出现以下两类信息，第二行会显示你电脑上的实际文件路径：
+
+```text
+学习检测 Codex 本地服务：http://127.0.0.1:18763
+连接码保存在：…\src\local\bridge-token.txt
+```
+
+**看到这两行后，让窗口保持打开，不用继续输入命令。** 窗口一直停在这里是正常的，表示服务正在等待浏览器连接。此时只能确认本地服务已启动，还没有调用 Codex 答题。
+
+### 本地 Codex 的模型怎么选？
+
+**模型在启动本地服务时指定。** 面板里的 API 模型下拉框、桌面版 Codex 当前会话的模型选择，都不会直接替这个服务切换模型。
+
+如果还不知道账号能使用哪些模型，可另开一个 PowerShell，运行 `codex`，进入 CLI 后输入 `/model` 查看当前客户端提供的模型和推理强度。记下要用的模型 ID 后退出；这里查看或选择模型，不等于已经为本地服务设置模型。可用范围受账号、登录方式和客户端版本影响，见 [官方模型说明](https://learn.chatgpt.com/docs/models)。
+
+例如，**账号可用 `gpt-6.1-sol` 时**，可以指定该模型和 `medium` 推理强度。若服务已经运行，先在服务窗口按 `Ctrl+C` 停止，再在**同一个有 `package.json` 的 PowerShell 窗口**中逐行运行：
+
+```powershell
+$env:XXT_CODEX_MODEL = "gpt-6.1-sol"
+$env:XXT_CODEX_REASONING = "medium"
+npm run start:codex
+```
+
+将第一行引号里的 ID 换成你实际可用的模型。推理强度也要选该模型支持的值；不确定时可省略指定强度，先使用该模型的默认强度。处理图片题还需要模型支持图片输入。
+
+启动后，终端应显示类似 `答题模型：gpt-6.1-sol；推理强度：medium` 的信息，表示服务已经读到你的设置。**这不是模型调用成功的证明**；实际调用时仍会检查账号权限和模型可用性。
+
+这些 `$env:` 设置只在当前 PowerShell 窗口及它启动的服务中有效；关闭窗口后，下次需重新输入。换模型或强度时，先 `Ctrl+C`，修改变量，再重新启动服务。
+
+如果想清除当前窗口中的指定值，运行后再启动服务：
+
+```powershell
+Remove-Item Env:XXT_CODEX_MODEL -ErrorAction SilentlyContinue
+Remove-Item Env:XXT_CODEX_REASONING -ErrorAction SilentlyContinue
+npm run start:codex
+```
+
+清除或留空表示服务不传模型 / 强度参数，由 CLI 本次运行的默认行为决定。当前服务使用 `--ignore-user-config`，不会读取个人 `config.toml`；因此不要依靠修改该文件来给本服务选模型。这个参数的含义见 [官方 CLI 参考](https://learn.chatgpt.com/docs/developer-commands?surface=cli)。
+
+**已经保存了“本地 Codex”配置，怎么换模型？**
+
+保留面板中的那张配置卡片，在服务窗口按 `Ctrl+C`，按上面的 `$env:` 命令指定新模型并重新启动即可。只要服务地址、端口和连接码没有变化，原来保存的文字 / 图片用途继续使用，无需删除配置或重新填写 Key。卡片上的 `codex` 标签不代表服务此刻实际使用的模型；模型设置以服务启动时读取的值为准，实际调用是否成功仍需看调用结果。
+
+更换后可以点击“测试 AI”检查连接，但该测试不会核对模型是否可用。若同时更改了端口、连接码或换用另一份服务文件夹，则需要核对并更新面板中的地址和 Key。
+
+### 第 5 步：找到连接码，填入浏览器脚本
+
+回到第 2 步的文件夹窗口，依次打开 **`src` → `local` → `bridge-token.txt`**，用记事本打开文件，复制里面的一整行连接码。这个文件会在首次启动服务时自动生成。
+
+回到学习通具体章节页，展开脚本面板的“AI 接口设置”，按下表填写并保存：
+
+| 面板项目 | 填什么 |
+| --- | --- |
+| 服务商 / 接入方式 | 选择“本地 Codex” |
+| Base URL | `http://127.0.0.1:18763` |
+| Key | 刚复制的 `bridge-token.txt` 中的连接码 |
+
+这里的 Key 用来验证浏览器对本地服务的访问，**填本地连接码即可**。不要上传或分享这个文件及其内容。
+
+### 第 6 步：测试连接，了解测试结果的含义
+
+保持服务窗口打开，在脚本面板点击 **“测试 AI”**。
+
+- **测试通过：** 说明浏览器能连接本地服务，地址和连接码可以使用。本地 Codex 模式的这项测试不会调用模型，因此不能证明 Codex 的登录、额度、模型权限或实际答题请求都正常。
+- **测试失败：** 先按下方排错表检查，修正后重新测试。
+
+连接测试通过后，再按需使用“仅看答案”或“开始自动”；这时才会实际调用 Codex，消耗所用账号或接口的模型用量。调用失败时，同时查看脚本提示和本地服务窗口中的错误。
+
+### 下次使用时怎么启动、结束时怎么关闭
+
+文件保留在原处时，下次无需重新下载或复制连接码。按第 3、4 步，在有 `package.json` 的文件夹内重新启动服务即可；如果面板中保留了之前的地址和连接码，也无需重填。
+
+关闭 PowerShell 窗口，或在服务窗口按 `Ctrl+C`，都会停止本地服务。浏览器随后无法连接时，先检查服务是否仍在运行。
+
+<details>
+<summary>遇到报错时，展开按提示排查</summary>
+
+| 看到的提示 | 处理方法 |
+| --- | --- |
+| `ENOENT`、找不到 `package.json` | 回到第 2、3 步，从正确文件夹打开 PowerShell；确认 `Test-Path .\package.json` 返回 `True` 后再启动。无需为此重装 npm。 |
+| `npm.ps1` 无法加载，系统禁止运行脚本 | 使用 `npm.cmd --version` 检查 npm；第 4 步改用 `npm.cmd run start:codex`，无需修改系统执行策略。 |
+| 找不到 `node`、`npm` 或 `codex` 命令 | 回到第 1 步检查安装，安装后重新打开终端。已安装 CLI 但服务仍找不到它时，见下面的高级设置。 |
+| `EADDRINUSE`、端口已被占用 | 检查是否已在另一个窗口启动过本服务；已有服务时直接使用。不要重复开多个服务；其他程序占用时可按高级设置改端口。 |
+| 连接失败 | 检查服务窗口是否仍在运行，以及 Base URL 是否与服务窗口显示的一致。 |
+| 401、连接码无效 | 重新打开当前这份服务文件夹里的 `src/local/bridge-token.txt`，复制完整连接码，填入 Key 并保存。 |
+| 连接测试通过，但实际答题失败 | 查看服务窗口中的 Codex 错误；先核对第 1 步的 CLI 登录状态，再检查所用模型、账号额度和网络。连接测试不会检查这些项目。 |
+
+</details>
+
+<details>
+<summary>高级设置：指定 Codex 路径、模型、推理强度或端口</summary>
+
+默认设置可用时，无需修改这些项目。环境变量需在启动服务前设置；修改后重启服务才会生效。
+
+| 环境变量 | 用途 |
+| --- | --- |
+| `XXT_CODEX_BIN` | 服务找不到 Codex 时，填入电脑上 Codex CLI 的原生可执行文件完整路径。Windows 下不要填写无法直接执行的 `.cmd` 包装器路径。 |
+| `XXT_CODEX_MODEL` | 指定 CLI 使用的模型；留空则不传模型参数。具体启动命令见上方“本地 Codex 的模型怎么选？”。 |
+| `XXT_CODEX_REASONING` | 指定所选模型支持的推理强度；留空则不传强度参数。服务不读取个人 `config.toml`。 |
+| `XXT_CODEX_PORT` | 更改本地服务端口，默认 `18763`。改动后，面板中的 Base URL 也要改成相同端口。 |
+
+面板中的 API 模型和推理选项不会改变本地 Codex 服务的配置。服务只监听本机回环地址。
+
+</details>
 
 ## 常见问题
 

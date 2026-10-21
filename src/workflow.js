@@ -135,7 +135,16 @@
         if(apiFailureUntil<=Date.now())apiFailureUntil=Date.now()+60000;
         themeStatus?.showApiFailure(apiFailureUntil,apiFailureAutomatic);
     }
-    function save() { if (task) GM_setValue(`xxt-check:${task}`, record); }
+    function checkRecordKey(value) {
+        if (coursePage()) return `xxt-check:${value}`;
+        const params=new URLSearchParams(location.search);
+        const identity=params.get('workId')||params.get('workid')||params.get('oldWorkId')||params.get('jobid')||params.get('workAnswerId')||
+            location.pathname+'?'+[...params].filter(([key])=>!['enc','cpi','ut','v','t','_'].includes(key)).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>`${k}=${v}`).join('&');
+        // The coordinator's chapter task is shared by sibling homework frames.
+        // Their grades, submission phase and answers must never share a record.
+        return `xxt-check:${value}/work:${encodeURIComponent(identity)}`;
+    }
+    function save() { if (task) GM_setValue(checkRecordKey(task), record); }
     function setTask(value) {
         if (task === value) return;
         if(retryQueue?.current){const active=catalogSnapshot().find(x=>x.node.classList.contains('posCatalog_active'));if(active&&(active.index!==retryQueue.current.index||active.title!==retryQueue.current.title)){retryQueue=null;automatic=false;stopped=true;notify('检测到手动切章，已取消集中补做。');}}
@@ -153,7 +162,7 @@
             quizFrames.clear();
         }
         closeDocument(); documentReportedTask = ''; documentOwner = null;
-        task = value; record = GM_getValue(`xxt-check:${task}`, {}) || {}; epoch++;
+        task = value; record = GM_getValue(checkRecordKey(task), {}) || {}; epoch++;
     }
     function post(target, type, data = {}) { target.postMessage({ source: 'xxt-codex-0.3', type, nonce, ...data }, '*'); }
     function ancestorDistance(target) {
@@ -335,10 +344,10 @@
         if (!coursePage() || !P || stepTransition) return null;
         return pageInventory().videos.find(asset => !videoDone(asset))?.video || null;
     }
-    function blockPage(reason) {
+    function blockPage(reason, timeout = 20000) {
         pageReviewNeeded = true; pageBlockedAt ||= Date.now();
         notify(reason);
-        if (uiTimedOut(pageBlockedAt, 20000)) throw new Error(`${reason}，已暂停，保留当前章节`);
+        if (uiTimedOut(pageBlockedAt, timeout)) throw new Error(`${reason}，已暂停，保留当前章节`);
         return true;
     }
     function resetCard(id) {
@@ -362,7 +371,7 @@
         if (stepTransition) {
             let fresh = false;
             try { fresh = document.querySelector('#iframe')?.contentDocument !== stepTransition.previousDocument; } catch { fresh = true; }
-            if (!card || card.id !== stepTransition.id || !fresh) return blockPage('正在等待当前学习步骤的新内容加载');
+            if (!card || card.id !== stepTransition.id || !fresh) return blockPage('正在等待当前学习步骤的新内容加载', 90000);
             stepTransition = null;
         }
         if (card) resetCard(card.id);
@@ -489,7 +498,7 @@
             return true;
         }
         if (view.documents.length) pageReviewNeeded = true;
-        if (view.loading.length) return blockPage('正在等待页面所有任务加载');
+        if (view.loading.length) return blockPage('正在等待页面任务或成绩加载，请稍候…', 90000);
         if ((R?.find(pageWindow) || []).some(entry => !topicDone.has(entry.element))) { await readTopics(); return true; }
         const pendingMarker = view.markers.find(marker => marker.kind !== 'check' && !marker.done && !skippedMarkers.has(marker.element));
         if (pendingMarker) return blockPage(pendingMarker.kind === 'unknown' ? '存在无法识别且尚未完成的任务点' : '正在等待平台确认本页知识任务点完成');
@@ -504,7 +513,7 @@
             return true;
         }
         if (!view.questions.length && (view.markers.some(marker => marker.kind === 'check' && !marker.done) || checkStep()))
-            return blockPage('学习检测已打开，正在等待题目组件加载或识别');
+            return blockPage('学习检测已打开，正在等待题目组件加载或识别', 90000);
         if ((skippedAssets.size || skippedMarkers.size) && !pendingKnowledge(view) && view.questions.every(questionDone)) {
             await advanceCourse('已处理可识别任务，其余已记录待复核'); return true;
         }
@@ -628,6 +637,18 @@
             record.confirmed = true; record.at = Date.now(); save();
             notify(`已提交第 ${record.submissions || 1} 轮，等待平台成绩…`);
         } finally { if (submitRequest === pending) cancelConfirmation(); }
+    }
+    function waitForSubmittedGrade() {
+        // A confirmed submission may leave the old form visible while the platform
+        // loads its graded view. Re-read once with GET; never click Submit again.
+        if (!uiTimedOut(record.at, record.gradeReloaded ? 60000 : 30000)) return;
+        if (!record.gradeReloaded) {
+            record.gradeReloaded = true; record.at = Date.now(); save();
+            notify('答案已提交，成绩加载较慢，正在刷新测验页读取成绩，请稍候…');
+            pageWindow.location.reload();
+            return;
+        }
+        throw new Error('已提交并刷新测验页，平台成绩仍未加载，请稍后复核');
     }
     async function finishRedo() {
         const pending = { id: crypto.randomUUID(), task, kind: 'redo', confirmed: false };
@@ -755,6 +776,7 @@
             record.lastQuestions = questions;
             record.randomized = answers.filter(answer => answer.randomized).map(answer => answer.id);
             record.submissions = (record.submissions || 0) + 1;
+            delete record.gradeReloaded;
             record.phase = 'submitted'; record.confirmed = false; record.at = Date.now(); save();
             button.click();
             await finishSubmission(() => {
@@ -898,13 +920,15 @@
         if (action === 'pause') throw new Error('平台剩余次数无法识别，已停止');
         if (action !== 'redo') return;
         record.redos = record.redos || 0;
-        record.budget = Math.min(record.budget ?? result.remaining, record.redos + result.remaining);
-        if (record.redos >= record.budget) { await navigate('已达到平台提供的重做次数上限'); return; }
+        if (Number.isSafeInteger(result.remaining)) {
+            record.budget = Math.min(record.budget ?? result.remaining, record.redos + result.remaining);
+            if (record.redos >= record.budget) { await navigate('已达到平台提供的重做次数上限'); return; }
+        }
         record.history = [...(record.history || []), { finalScore: result.finalScore, maxScore: result.maxScore,
             answers: record.lastAnswers || [], review: result.review }].slice(-5);
         beforeClick();
         record.redos++; record.phase = 'redo-clicked'; record.redoConfirmed = false; record.at = Date.now(); record.priorResult = result.fingerprint; save();
-        notify(`成绩 ${result.finalScore}/${result.maxScore}，已读取 ${learned.length} 道正确答案，重做（平台剩余 ${result.remaining} 次）…`);
+        notify(`成绩 ${result.finalScore}/${result.maxScore}，已读取 ${learned.length} 道正确答案，重做${result.remaining == null ? '（平台提供可用入口）' : `（平台剩余 ${result.remaining} 次）`}…`);
         result.redo.click();
         await finishRedo();
     }
@@ -1333,13 +1357,16 @@
             if (coursePage() && await coordinatePage()) return;
             const result = D.readResult(document);
             if (result) { busy = true; await processResult(result); return; }
+            if (!coursePage() && record.phase === 'submitted' && record.confirmed) {
+                waitForSubmittedGrade(); return;
+            }
             if (await readTopics()) return;
             if (await readDocuments()) return;
             if (D.enabled(document.querySelector('.btnSubmit.workBtnIndex')) && D.extract(document).length) {
                 if (!aiEnabled()) { pause('不接入 AI：章节题目留待手动作答，记录后继续'); return; }
                 if (record.phase === 'submitted') {
                     if (!record.confirmed) { busy = true; await finishSubmission(); return; }
-                    if (uiTimedOut(record.at, 30000)) throw new Error('提交后未出现成绩，已停止，避免重复提交');
+                    waitForSubmittedGrade();
                     return;
                 }
                 if (record.phase === 'done') return;

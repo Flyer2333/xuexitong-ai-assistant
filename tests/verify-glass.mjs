@@ -41,7 +41,17 @@ try{
   await p.screenshot({path:resolve(root,'docs/themes',brand+'.png'),clip:{x:708,y:12,width:384,height:972}});
   observations.push({label:'theme-'+brand,documentScreenshot:{width:384,height:972},actionTopGap:gap});await p.close();
  }
- const local=await open();await local.locator('[data-ai-settings] summary').click();await local.locator('[data-ai-field=provider]').selectOption('codex');assert.match(await local.locator('[data-ai-field=key]').getAttribute('placeholder'),/本地.*连接码/);assert.match(await local.locator('[data-ai-key-help]').textContent(),/bridge-token.txt/);await local.locator('[data-ai-field=provider]').selectOption('deepseek');assert(await local.locator('[data-ai-key-help]').isHidden());await local.close();
+ for(const [width,height] of [[1920,1080],[2880,1600],[640,450]])for(const failure of [false,true]){
+  const p=await open('one','deepseek',width,height);await p.emulateMedia({reducedMotion:'reduce'});
+  await p.addStyleTag({content:'*{margin:0} dialog{position:absolute;inset:auto;left:0;top:0;width:100vw;height:100vh;margin:0}'});
+  await p.evaluate(fail=>{window.__fail=fail;__gm['xxt-ai-vision-enabled']=true;__gm['xxt-ai-vision-config']={...__gm['xxt-ai-config'],vision:true};},failure);
+  await p.locator('[data-action=connect]').click();const d=p.getByRole('dialog');await d.waitFor();const b=await d.boundingBox();
+  assert(Math.abs(b.x+b.width/2-width/2)<2,'Result must be horizontally centered');assert(Math.abs(b.y+b.height/2-height/2)<2,'Result must be vertically centered');
+  const style=await d.evaluate(el=>{const b=getComputedStyle(el,'::backdrop');return{bg:b.backgroundColor,blur:b.backdropFilter,text:el.textContent};});assert.equal(style.bg,'rgba(0, 0, 0, 0)');assert.equal(style.blur,'none');assert(!style.text.includes('不保证'));
+  if(width===1920)await p.screenshot({path:resolve(out,failure?'result-centered-failure.png':'result-centered-success.png')});
+  observations.push({label:`center-${width}-${height}-${failure}`,bounds:b,backdrop:style.bg});await p.keyboard.press('Escape');await p.close();
+ }
+ const local=await open();await local.locator('[data-ai-settings] summary').click();await local.locator('[data-ai-field=provider]').selectOption('codex');assert.match(await local.locator('[data-ai-field=key]').getAttribute('placeholder'),/本地.*连接码/);assert.match(await local.locator('[data-ai-key-help]').textContent(),/package.json/);assert.match(await local.locator('[data-ai-key-help]').textContent(),/bridge-token.txt/);assert.match(await local.locator('[data-ai-key-help] a').first().getAttribute('href'),/archive\/refs\/heads\/main.zip$/);await local.locator('[data-ai-field=provider]').selectOption('deepseek');assert(await local.locator('[data-ai-key-help]').isHidden());await local.close();
  await writeFile(resolve(out,'observations.json'),JSON.stringify({scope:'Synthetic GM transport; no real API, credentials or course submissions',observations},null,2));console.log('Glass UI: unique/dual roles, nonvisual confirmation, test success/failure, exclusive skins, nine brands, 15 layout datasets and 200% equivalent viewport passed.');
 }finally{await browser.close();}
 

@@ -82,8 +82,8 @@
 
 使用 API 的用户可以跳过这一节。连接 Codex 需要电脑已安装 Node.js 和可用的 Codex CLI，并完成 CLI 登录。
 
-1. 下载并解压源码，在终端中进入项目目录。
-2. 运行 `node src/bridge.mjs`，不要关闭该服务终端。
+1. 点击[下载本地服务 ZIP](https://github.com/Flyer2333/xuexitong-ai-assistant/archive/refs/heads/main.zip)。浏览器下载完成后，在下载列表中点“在文件夹中显示”，找到 `xuexitong-ai-assistant-main.zip`。
+2. 右键 ZIP → **全部解压**，打开解压出的 `xuexitong-ai-assistant-main` 文件夹。能看到 `package.json`、`src` 和 `docs` 的这一层，就是下面要使用的文件夹；如果只有一个同名文件夹，再点进去一层。在资源管理器地址栏输入 `powershell` 并回车，打开位于此文件夹的终端；运行 `npm run start:codex`，不要关闭这个终端。
 3. 首次启动会生成 `src/local/bridge-token.txt`。打开该文件，将连接码复制到脚本设置中。连接码用于验证本机访问，不要上传或分享。
 4. 面板选择“本地 Codex”，Base URL 保持 `http://127.0.0.1:18763`，把连接码填入 Key 栏并保存。
 5. 点击“测试 AI”，确认本地服务可以连接后再开始。此测试不会调用模型，不能单独确认 CLI 登录和模型调用是否正常。

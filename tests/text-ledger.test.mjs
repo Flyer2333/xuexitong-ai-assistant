@@ -2,6 +2,13 @@ import test from 'node:test';import assert from 'node:assert/strict';import {cre
 const require=createRequire(import.meta.url),C=require('../src/core.cjs'),R=require('../src/retry.cjs'),L=require('../src/run-ledger.cjs');
 const q={id:'q1',type:'blank',text:'填写两空',slots:2,options:[]};
 const answer={id:'q1',texts:['甲','乙'],choices:[],readable:true,confidence:1,explanation:'依据题意'};
+
+test('an enabled redo remains usable when the platform omits its remaining count',()=>{
+ assert.equal(C.nextAction({resultKnown:true,allCorrect:false,remaining:null,redoAvailable:true}),'redo');
+ assert.equal(C.nextAction({resultKnown:true,allCorrect:false,remaining:0,redoAvailable:true}),'skip');
+ assert.equal(C.nextAction({resultKnown:true,allCorrect:false,remaining:null,redoAvailable:false}),'skip');
+ assert.equal(C.nextAction({resultKnown:true,allCorrect:true,remaining:null,redoAvailable:true}),'advance');
+});
 test('text answers require exact slot mapping, nonempty values and confidence; never randomize text',()=>{
  assert.deepEqual(C.resolveAnswers([q],{answers:[answer]})[0].texts,['甲','乙']);
  assert.throws(()=>C.resolveAnswers([q],{answers:[{...answer,texts:['甲']}]}),/数量/);

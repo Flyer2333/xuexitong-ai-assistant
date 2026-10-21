@@ -83,7 +83,12 @@
         const catalogNote = document.createElement('small'); catalogNote.dataset.aiCatalogNote = 'true'; form.append(catalogNote);
         field('key','API Key / 本地连接码'); fields.key.type = 'password'; fields.key.autocomplete = 'off';
         const keyHelp=document.createElement('small');keyHelp.dataset.aiKeyHelp='true';fields.key.closest('label').after(keyHelp);
-        function updateKeyHelp(){const local=fields.protocol.value==='codex';fields.key.placeholder=local?'请输入本地服务生成的连接码':'请输入该服务商的 API Key';keyHelp.textContent=local?'先在解压后的项目目录运行 npm run start:codex，打开生成的 src/local/bridge-token.txt，将完整连接码填到这里；服务需保持运行。无需另填 OpenAI API Key。':'';keyHelp.hidden=!local;}
+        function updateKeyHelp(){
+            const local=fields.protocol.value==='codex';fields.key.placeholder=local?'请输入本地服务生成的连接码':'请输入该服务商的 API Key';keyHelp.replaceChildren();keyHelp.hidden=!local;if(!local)return;
+            const download=document.createElement('a');download.textContent='① 下载本地服务 ZIP';download.href='https://github.com/Flyer2333/xuexitong-ai-assistant/archive/refs/heads/main.zip';download.target='_blank';download.rel='noopener noreferrer';
+            const guide=document.createElement('a');guide.textContent='查看完整安装教程';guide.href='https://github.com/Flyer2333/xuexitong-ai-assistant/blob/main/docs/INSTALL.md#local-codex';guide.target='_blank';guide.rel='noopener noreferrer';
+            keyHelp.append(download,' → ② 解压 ZIP，打开其中含 package.json 的文件夹（通常叫 xuexitong-ai-assistant-main） → ③ 在此文件夹打开终端，运行 npm run start:codex → ④ 打开生成的 src/local/bridge-token.txt，复制完整连接码填到这里。服务需保持运行，无需另填 OpenAI API Key。',guide);
+        }
         field('maxTokens','最大输出 token'); fields.maxTokens.type = 'number'; fields.maxTokens.min = '256'; fields.maxTokens.max = '32768';
         field('reasoning','推理设置（按当前模型适配）',[]);
         const reasoningNote = document.createElement('small'); reasoningNote.dataset.aiReasoningNote = 'true'; form.append(reasoningNote);

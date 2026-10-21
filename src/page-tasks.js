@@ -49,7 +49,9 @@
                     id: `video:${childPath}/${frame.getAttribute('jobid') || frame.getAttribute('objectid') || 'waiting'}`,
                     video: null, win: frame.contentWindow, root: frame.contentWindow, container: frame.closest('.ans-attach-ct') });
                 try {
-                    if (/\/knowledge\/cards/.test(src) && (!frame.contentDocument?.body || frame.contentDocument.readyState === 'loading')) loading.push(frame);
+                    const taskFrame = /\/knowledge\/cards|\/modules\/work\/|\/api\/work(?:[/?]|$)|\/work\/(?:doHomeWorkNew|selectWorkQuestionYiPiYue)/.test(src);
+                    const child = frame.contentDocument;
+                    if (taskFrame && (!child?.body || child.readyState === 'loading' || child.URL === 'about:blank')) loading.push(frame);
                 } catch {}
             }
         }

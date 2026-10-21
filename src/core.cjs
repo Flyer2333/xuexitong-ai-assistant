@@ -97,6 +97,7 @@
         if (!resultKnown || typeof allCorrect !== 'boolean') return 'wait';
         if (allCorrect === true) return 'advance';
         if (redoAvailable !== true || remaining === 0) return 'skip';
+        if (remaining == null) return 'redo';
         if (!Number.isSafeInteger(remaining) || remaining < 0) return 'pause';
         return 'redo';
     }

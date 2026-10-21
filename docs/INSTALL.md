@@ -104,8 +104,17 @@ codex login status
 ### 第 2 步：下载、解压，找到有 package.json 的文件夹
 
 1. 点击 **[下载本地服务 ZIP](https://github.com/Flyer2333/xuexitong-ai-assistant/archive/refs/heads/main.zip)**。下载完成后，在浏览器下载列表中点“在文件夹中显示”，找到 `xuexitong-ai-assistant-main.zip`。
-2. 右键 ZIP → **全部解压**，选择电脑上方便找到的位置，例如 D 盘的一个文件夹。不要直接在 ZIP 预览窗口里操作。
+2. 回到下载文件夹，**右键 ZIP 文件 → 全部解压 → 选择 D 盘的目标文件夹 → 点击“解压”**，等待解压完成。双击 ZIP 只是查看里面的内容，不会把文件解压出来。
 3. 打开解压出的文件夹，找到下面这一层。**`package.json`、`src` 和 `docs` 必须能在同一个窗口里看到。** 如果里面只有一个同名文件夹，再双击进去一层。
+
+**先检查地址栏，再打开终端：路径里不能有 `.zip\`。** ZIP 预览窗口也能显示 `package.json`、`src`、`docs`，仅看到这些文件还不能证明已经解压。如果文件列表出现“压缩率”“压缩后大小”等列，也说明你仍在压缩包里。
+
+```text
+仍在压缩包里：…\xuexitong-ai-assistant-main.zip\xuexitong-ai-assistant-main
+已解压的目录：D:\学习通助手\xuexitong-ai-assistant-main
+```
+
+第二行只是路径示例，以你实际选择的解压位置为准。
 
 ```text
 xuexitong-ai-assistant-main
@@ -119,7 +128,9 @@ xuexitong-ai-assistant-main
 
 ### 第 3 步：从这个文件夹打开 PowerShell，并核对位置
 
-保持第 2 步的文件夹窗口打开，按 `Alt+D` 选中顶部的**地址栏**，输入 `powershell`，再按回车。这里输入的是地址栏，不是右侧的搜索框。
+确认当前是第 2 步中**地址不含 `.zip\` 的普通文件夹**，在文件夹空白处右键，选择“在终端中打开”；Windows 10 也可按住 `Shift` 再右键，选择“在此处打开 PowerShell 窗口”。
+
+也可以按 `Alt+D` 选中顶部地址栏，输入 `powershell` 并回车。这个方法需要真实文件夹；在 ZIP 预览窗口里使用，可能无法带入目录，打开后仍停在 `PS C:\>`。
 
 在新打开的 PowerShell 窗口中，先运行：
 
@@ -127,7 +138,15 @@ xuexitong-ai-assistant-main
 Test-Path .\package.json
 ```
 
-**看到 `True` 才继续下一步。** 如果显示 `False`，说明终端所在位置不对：回到第 2 步，找到有 `package.json` 的那一层，再从地址栏打开 PowerShell。
+**看到 `True` 才继续下一步。** 如果显示 `False`，回到第 2 步，确认已解压并进入含 `package.json` 的真实文件夹；重新在那里打开终端，或使用下面的备用方法切换目录。
+
+**备用方法：手动切换目录。** 如果终端仍停在 `PS C:\>`，回到已经解压的普通文件夹，按 `Alt+D`、`Ctrl+C` 复制完整路径。再回到 PowerShell，运行下面这行后，按提示粘贴路径并回车：
+
+```powershell
+Set-Location -LiteralPath ((Read-Host '请粘贴解压后、含 package.json 的文件夹路径').Trim('"'))
+```
+
+然后重新运行 `Test-Path .\package.json`，返回 `True` 后再启动服务。不要粘贴包含 `.zip\` 的路径。
 
 > 如果提示符是 `PS C:\>`，不要直接运行启动命令。npm 会在终端当前文件夹中查找 `package.json`；找不到时，就会报你截图中的 `ENOENT`、`C:\package.json` 错误。只复制下方代码框内的命令，不要把 `PS …>` 一起复制。
 

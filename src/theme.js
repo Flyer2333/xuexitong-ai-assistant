@@ -39,7 +39,13 @@
                     const b=document.createElement('button');b.type='button';b.textContent=label+(active?' ✓':'');b.dataset.purpose=kind;b.dataset.profileId=p.id;b.setAttribute('aria-pressed',String(active));
                     b.onclick=async()=>{const latest=vault().list().find(x=>x.id===p.id);if(!latest)return;const pressed=vault().selected(latest.config,kind);if(!pressed&&kind==='image'&&!await askImageUse(latest.config,b))return;onChange();vault().assign(latest.config,kind,!pressed);feedback.textContent=pressed?`已取消此接口的${kind==='text'?'文字':'图片'}用途。`:`已设为${kind==='text'?'文字':'图片'}接口：${latest.config.model}。请点击“测试 AI”验证。`;profilesChanged();section.querySelector(`[data-purpose="${kind}"][data-profile-id="${p.id}"]`)?.focus();};buttons.append(b);
                 }
-                const remove=document.createElement('button');remove.type='button';remove.textContent='删除配置';remove.onclick=()=>{onChange();vault().remove(p.id);profilesChanged();};buttons.append(remove);item.append(name,meta,key,dates,buttons);rows.append(item);
+                const remove=document.createElement('button');remove.type='button';remove.textContent='删除配置';remove.onclick=()=>{onChange();vault().remove(p.id);profilesChanged();};buttons.append(remove);item.append(name,meta,key,dates);
+                if(p.config.protocol==='codex'){
+                    const localNote=document.createElement('small');localNote.dataset.localServiceNote='true';
+                    localNote.textContent='请保持运行本地服务的 PowerShell 窗口开启；关闭后此接口暂不可用。重新启动原服务即可恢复；若地址或连接码已变，请更新并保存接口配置。';
+                    item.append(localNote);
+                }
+                item.append(buttons);rows.append(item);
             }
             if(!saved.length)rows.textContent='暂无已保存接口。在接口设置中填写后点击“保存设置”，即可在这里切换或删除。';
         }
@@ -86,8 +92,8 @@
         function updateKeyHelp(){
             const local=fields.protocol.value==='codex';fields.key.placeholder=local?'请输入本地服务生成的连接码':'请输入该服务商的 API Key';keyHelp.replaceChildren();keyHelp.hidden=!local;if(!local)return;
             const download=document.createElement('a');download.textContent='① 下载本地服务 ZIP';download.href='https://github.com/Flyer2333/xuexitong-ai-assistant/archive/refs/heads/main.zip';download.target='_blank';download.rel='noopener noreferrer';
-            const guide=document.createElement('a');guide.textContent='查看完整安装教程';guide.href='https://github.com/Flyer2333/xuexitong-ai-assistant/blob/main/docs/INSTALL.md#local-codex';guide.target='_blank';guide.rel='noopener noreferrer';
-            keyHelp.append(download,' → ② 解压 ZIP，打开其中含 package.json 的文件夹（通常叫 xuexitong-ai-assistant-main） → ③ 在此文件夹打开终端，运行 npm run start:codex → ④ 打开生成的 src/local/bridge-token.txt，复制完整连接码填到这里。服务需保持运行，无需另填 OpenAI API Key。',guide);
+            const guide=document.createElement('a');guide.textContent='查看完整安装教程';guide.href='https://github.com/Flyer2333/xuexitong-ai-assistant/blob/main/docs/INSTALL.md#本地-codex-连接';guide.target='_blank';guide.rel='noopener noreferrer';
+            keyHelp.append(download,document.createElement('br'),'② 解压后进入含 package.json 的文件夹，在地址栏输入 powershell 打开终端。',document.createElement('br'),'③ 运行 npm run start:codex，用 ↑↓ 和回车选择模型、推理强度，服务随后自动启动。',document.createElement('br'),'④ 打开 src/local/bridge-token.txt，复制完整连接码填到这里。',document.createElement('br'),'请保持服务窗口开启；关闭后重新启动原服务。地址或连接码变化时需更新配置，无需另填 OpenAI API Key。 ',guide);
         }
         field('maxTokens','最大输出 token'); fields.maxTokens.type = 'number'; fields.maxTokens.min = '256'; fields.maxTokens.max = '32768';
         field('reasoning','推理设置（按当前模型适配）',[]);

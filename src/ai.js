@@ -171,7 +171,7 @@
         return { promise, abort() { cancel?.(); } };
     }
     function request(path, payload) {
-        if(path==='/test-selected')return testSelected();
+        if(path==='/test-selected')return testSelected(payload);
         if (path !== '/solve' || !root.XxtDispatch) return transport({...load(),vision:false}, path, payload);
         const configuredVision = imageConfig();
         return root.XxtDispatch.run(payload, { base:load(), vision:configuredVision,
@@ -189,8 +189,9 @@
             return {verified:true};
         })};
     }
-    function testSelected(){
+    function testSelected({onProgress}={}){
         let active,cancelled=false;
+        const progress=info=>{try{onProgress?.(info);}catch{}};
         const promise=(async()=>{
             const text=load(),image=imageConfig(),results=[],localChecks=new Map();
             const tasks=[];if(text.key)tasks.push({role:'文字',config:{...text,vision:false}});if(image)tasks.push({role:'图片',config:image});
@@ -202,19 +203,23 @@
                     if(task.config.protocol==='codex'){
                         const identity=JSON.stringify([task.config.baseUrl,task.config.key]);
                         let checked=localChecks.get(identity);
-                        if(!checked){active=transport({...task.config,vision:false},'/health');checked=await active.promise;localChecks.set(identity,checked);}
+                        if(!checked){progress({role:task.role,phase:'health'});active=transport({...task.config,vision:false},'/health');checked=await active.promise;localChecks.set(identity,checked);}
                         metadata=localMetadata(checked);
+                        progress({role:task.role,phase:'model'});
                         active=task.role==='图片'?testImages(task.config):testLocalText(task.config);
                         const result=await active.promise;
                         if(cancelled)throw Error('已停止本次 AI 测试');
                         if(!result.verified){const error=Error(result.message);error.code='IMAGE_MISMATCH';throw error;}
                         results.push({role:task.role,provider:task.config.provider,model:metadata.model||task.config.model,reasoningEffort:metadata.reasoningEffort,character:root.XxtPersonas?.character(task.config),success:true});
+                        progress({role:task.role,phase:'done',success:true});
                         continue;
                     }
+                    progress({role:task.role,phase:'model'});
                     active=task.role==='图片'?testImages(task.config):transport(task.config,'/health');const result=await active.promise;
                     if(task.role==='图片'&&!result.verified){const error=Error(result.message);error.code='IMAGE_MISMATCH';throw error;}
                     results.push({role:task.role,provider:task.config.provider,model:task.config.model,character:root.XxtPersonas?.character(task.config),success:true});
-                }catch(error){if(cancelled||/停止|取消/.test(error.message))throw error;results.push({role:task.role,provider:task.config.provider,model:metadata.model||task.config.model,reasoningEffort:metadata.reasoningEffort,character:root.XxtPersonas?.character(task.config),success:false,...root.XxtPersonas.explain(error)});}
+                    progress({role:task.role,phase:'done',success:true});
+                }catch(error){if(cancelled||/停止|取消/.test(error.message))throw error;results.push({role:task.role,provider:task.config.provider,model:metadata.model||task.config.model,reasoningEffort:metadata.reasoningEffort,character:root.XxtPersonas?.character(task.config),success:false,...root.XxtPersonas.explain(error)});progress({role:task.role,phase:'done',success:false});}
             }
             return {success:results.every(r=>r.success),results};
         })();return {promise,abort(){cancelled=true;active?.abort();}};

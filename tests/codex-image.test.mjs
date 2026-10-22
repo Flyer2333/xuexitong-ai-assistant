@@ -50,6 +50,15 @@ test('text-only selection makes one real text probe and no image probe',async()=
  const fixture=setupSelected({image:false});assert((await A.testSelected().promise).success);assert.equal(fixture.calls.length,2);assert.equal(JSON.parse(fixture.calls[1].data).images.length,0);
 });
 
+test('connection progress reports stages and validated outcomes without credentials',async()=>{
+ setupSelected();const stages=[];assert((await A.request('/test-selected',{onProgress:info=>stages.push(info)}).promise).success);
+ assert.deepEqual(stages,[{role:'文字',phase:'health'},{role:'文字',phase:'model'},{role:'文字',phase:'done',success:true},{role:'图片',phase:'model'},{role:'图片',phase:'done',success:true}]);assert(!JSON.stringify(stages).includes(local.key));
+});
+
+test('progress UI callback errors do not interrupt connection validation',async()=>{
+ setupSelected();assert((await A.testSelected({onProgress(){throw Error('fixture UI error');}}).promise).success);
+});
+
 test('reachable health alone does not pass when model answer is wrong',async()=>{
  setupSelected({image:false,wrongText:true});const result=await A.testSelected().promise;assert.equal(result.success,false);assert.equal(result.results[0].title,'文字测试未通过');assert.equal(result.results[0].model,'gpt-6-luna');
 });

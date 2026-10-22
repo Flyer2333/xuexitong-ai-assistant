@@ -1529,6 +1529,7 @@
         for (const [action, label] of [['connect', '测试 AI'], ['start', '开始自动'], ['solve', '仅看答案'], ['stop', '停止']]) {
             const button = document.createElement('button'); button.textContent = label; button.dataset.action = action; button.style.cssText = 'margin:8px 4px 8px 0;padding:5px 9px;cursor:pointer';
             button.addEventListener('click', async () => {
+                let connectionNotice,connectionTimer;
                 try {
                     if (action === 'stop') stop();
                     if (action === 'start') await start();
@@ -1550,15 +1551,27 @@
                         if (quietNow()) { notify('夜间休息中，07:00 后可测试 AI'); return; }
                         button.disabled=true;button.textContent='正在测试…';
                         apiFailureShown=false;apiFailureUntil=0;
+                        let onProgress;
+                        if((XxtAi.load().key&&XxtAi.load().protocol==='codex')||XxtAi.imageConfig()?.protocol==='codex'){
+                            const started=Date.now(),completed=[];let phase='正在连接本地服务';
+                            connectionNotice=document.createElement('aside');connectionNotice.className='xxt-test-wait';connectionNotice.dataset.connectionTestWait='true';connectionNotice.setAttribute('role','status');
+                            const heading=document.createElement('strong'),tip=document.createElement('p'),status=document.createElement('p'),help=document.createElement('small');
+                            heading.textContent='本地 Codex 测试可能需要更长时间，请耐心等待';tip.textContent='需要启动 Codex CLI 并依次调用模型验证文字和已选图片，可能持续数十秒或更久。';help.textContent='请保持 PowerShell 服务窗口开启；无需重复点击，可点“停止”取消。';
+                            connectionNotice.append(heading,tip,status,help);actions.after(connectionNotice);
+                            const render=()=>{const value=[...completed,phase,`已用 ${Math.floor((Date.now()-started)/1000)} 秒`].join(' · ');if(status.textContent!==value)status.textContent=value;};
+                            onProgress=info=>{if(info.phase==='done'){completed.push(`${info.role}${info.success?'已通过':'未通过'}`);phase='正在整理测试结果';}else phase=info.phase==='health'?'正在连接本地服务':`正在验证${info.role}${info.role==='图片'?'识别':'作答'}`;render();};
+                            render();connectionTimer=setInterval(render,1000);notify('正在测试本地 Codex，请查看按钮下方的进度提示。');
+                        }
                         let result;
-                        try{result=await request('/test-selected');}catch(error){
+                        try{result=await request('/test-selected',{onProgress});}catch(error){
                             if(!/停止|取消|夜间/.test(error.message)){const c=XxtAi.load();globalThis.XxtAssistantTheme.testResult(button,{success:false,results:[{role:'文字',provider:c.provider,model:c.model,character:XxtPersonas.character(c),success:false,...XxtPersonas.explain(error)}]});}throw error;
                         }
                         notify(result.success?'AI 连接测试通过，点击“开始自动”即可。':'部分接口测试未通过，请查看结果中的原因。');
+                        if(result.results.some(r=>r.role==='文字'&&r.success))document.dispatchEvent(new Event('xxt-ai-test-passed'));
                         globalThis.XxtAssistantTheme.testResult(button,result);
                     }
                 } catch (error) { notify(error.message); }
-                finally { if(action==='connect'){button.disabled=false;button.textContent=label;} }
+                finally { clearInterval(connectionTimer);connectionNotice?.remove();if(action==='connect'){button.disabled=false;button.textContent=label;} }
             });
             actions.append(button);
         }

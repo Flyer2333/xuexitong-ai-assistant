@@ -307,7 +307,7 @@
             // A wrapper worker may own assets in its descendants. Do not invent an
             // extra "file" for that worker after the real file has already finished.
             if (!list || list.some(asset => covers(asset, source, entry.kind))) continue;
-            list.push({ id: `agent:${entry.nonce}`, win: source, root: source, video: null, entry: null });
+            list.push({ id: `agent:${entry.nonce}`, win: source, root: source, mediaKind: entry.mediaKind, video: null, entry: null });
         }
         if (view && view.signature !== pageSignature) { pageSignature = view.signature; pageChangedAt = Date.now(); }
         return view;
@@ -412,7 +412,8 @@
         for (const asset of view.videos) {
             if (skippedAssets.has(asset.id)) continue;
             // Never borrow a sibling's task icon, nor infer completion from the clock text.
-            if (!asset.container || !view.markers.some(marker => marker.element === asset.container && marker.kind === 'video')) continue;
+            if (!asset.container || !view.markers.some(marker => marker.element === asset.container && ['video','audio'].includes(marker.kind))) continue;
+            const audio = asset.mediaKind === 'audio', label = audio ? '音频' : '视频';
             const agent = [...frames].find(([source, entry]) => entry.kind === 'video' && covers(asset, source, 'video'));
             let state = videoSettlements.get(asset.id);
             if (state && (state.container !== asset.container || state.video !== asset.video || state.task !== task ||
@@ -439,8 +440,15 @@
                     source: agent?.[0], nonce: agent?.[1].nonce, mediaId: agent?.[1].mediaId };
                 videoSettlements.set(asset.id, state);
             }
-            if (state.settled) return blockPage('视频任务点重新变为未完成，请核对平台状态');
+            if (state.settled) return blockPage(`${label}任务点重新变为未完成，请核对平台状态`);
             pageReviewNeeded = true;
+            // Audio settles through the platform's normal ended/report handler.
+            // Replaying a short audio is not the video replay recovery contract.
+            if (audio) {
+                if (uiTimedOut(state.since, 23000)) throw new Error('音频已播完，但对应任务点尚未结算，请核对平台状态');
+                notify('音频已播完，等待对应任务点变绿后继续…');
+                return true;
+            }
             if (uiTimedOut(state.since, 23000)) throw new Error('视频已播完，重播恢复后任务点仍未结算或按钮不可用，已暂停，请手动核对');
             if (!state.clicked && Date.now() - state.since >= 3000) {
                 if (asset.video) {
@@ -471,12 +479,16 @@
             if (pending.video) {
                 pageBlockedAt = 0;
                 const video = pending.video;
-                if (await recoverVideoLine(video, `${task}/${currentCard}`)) return true;
+                const label = P.mediaLabel(video);
+                // Apply preferences before a native play-button click: that click
+                // can start playback immediately and bypass the paused branch.
+                applyMediaRate(video);
+                if (P.mediaKind(video) !== 'audio' && await recoverVideoLine(video, `${task}/${currentCard}`)) return true;
                 startedVideos.add(video);
                 if (pageVideo !== video) {
                     pageVideo?.pause(); window.app?._detachVideoEvents?.();
-                    video.scrollIntoView({ block: 'center', behavior: 'auto' });
-                    const play = video.ownerDocument.querySelector('.vjs-big-play-button');
+                    (video.closest('.video-js') || video).scrollIntoView({ block: 'center', behavior: 'auto' });
+                    const play = (video.closest('.video-js') || video.parentElement)?.querySelector('.vjs-big-play-button,button.vjs-play-control');
                     if (video.readyState === 0 && D.enabled(play)) { beforeClick(); play.click(); }
                 }
                 pageVideo = video;
@@ -485,15 +497,16 @@
                     try {
                         if (window.app) { window.app.configs.autoplay = true; await window.app.play(); }
                         else { applyMediaRate(video); await video.play(); }
-                    } catch (error) { if (!selectedMuted) audioBlocked(); else notify(`等待视频可播放：${error.message}`); }
+                        if (stopped || quietNow()) video.pause();
+                    } catch (error) { if (!selectedMuted) audioBlocked(); else notify(`等待${label}可播放：${error.message}`); }
                     finally { pagePlaying = false; }
                 }
-                notify(`正在播放本页视频 ${view.videos.indexOf(pending) + 1}/${view.videos.length}，全部完成后再处理其他任务…`);
+                notify(`正在播放本页${label} ${view.videos.indexOf(pending) + 1}/${view.videos.length}，全部完成后再处理其他任务…`);
             } else {
                 pending.container?.scrollIntoView({ block: 'center', behavior: 'auto' });
                 const agent = [...frames].find(([source, entry]) => entry.kind === 'video' && covers(pending, source, 'video'));
                 if (agent) grant(agent[0], agent[1]);
-                else blockPage('正在等待本页剩余视频组件加载');
+                else blockPage(`正在等待本页剩余${pending.mediaKind === 'audio' ? '音频' : '视频'}组件加载`);
             }
             return true;
         }
@@ -590,7 +603,7 @@
         const visit = (win, depth = 0) => {
             if (depth > 6) return;
             try {
-                for (const video of win.document.querySelectorAll('video')) if (D.visible(video)) applyMediaRate(video);
+                for (const video of P.playable(win.document)) applyMediaRate(video);
                 for (const frame of win.document.querySelectorAll('iframe')) if (D.visible(frame)) visit(frame.contentWindow, depth + 1);
             } catch {}
         };
@@ -602,11 +615,10 @@
         GM_setValue('xxt-playback-rate', selectedPlaybackRate); syncPlaybackRate();
     }
     function syncMuted() {
-        if (!automatic || stopped || quietNow()) return;
         const visit = (win, depth = 0) => {
             if (depth > 6) return;
             try {
-                for (const video of win.document.querySelectorAll('video')) if (D.visible(video)) video.muted = selectedMuted;
+                for (const video of P.playable(win.document)) video.muted = selectedMuted;
                 for (const frame of win.document.querySelectorAll('iframe')) if (D.visible(frame)) visit(frame.contentWindow, depth + 1);
             } catch {}
         };
@@ -964,6 +976,10 @@
         pageReviewNeeded = true;
         if (transitionBlocked(false)) return true;
         if (pageInventory()?.questions.some(asset => !questionDone(asset))) return true;
+        if (pageInventory()?.videos.length && pageInventory().videos.every(asset => asset.mediaKind === 'audio')) {
+            void continueKnowledge('音频已播完，任务点已确认').catch(error => { if (!stopped && !quietNow()) pause(error.message); });
+            return true;
+        }
         const nativeVideo = window.app?._getVideoEl?.();
         if (nativeVideo && !nativeVideo.ended) return true;
         const currentTask = courseTask();
@@ -1432,15 +1448,18 @@
     async function tickRemoteVideo() {
         if (quietNow()) { remoteVideo?.pause(); return; }
         if (coursePage()) return;
-        const video = document.querySelector('video#video_html5_api,video[id*="video_html5"],video');
-        if (!video || !D.visible(video)) return;
+        const video = P?.playable(document)[0] || null;
+        if (!video) return;
+        const label = P.mediaLabel(video);
+        // Keep the audio preference for manual replay as well as granted runs.
+        if (P.mediaKind(video) === 'audio' && video.muted !== selectedMuted) video.muted = selectedMuted;
         const identity = video.currentSrc || video.src || '';
         if (video !== remoteVideo || identity !== remoteMediaIdentity) {
             remoteVideo = video; remoteMediaIdentity = identity; remoteMediaId = crypto.randomUUID(); remoteVideoEnded = false; remotePlayAttempts = 0;
             remoteVideoTask = '';
             remoteSettlementMedia = ''; remoteSettlementRequests.clear();
         }
-        report('video-ready', { mediaId: remoteMediaId, viewVisible: renderedInPage, ended: video.ended });
+        report('video-ready', { mediaId: remoteMediaId, mediaKind: P.mediaKind(video), viewVisible: renderedInPage, ended: video.ended });
         if (remoteSettlementMedia === remoteMediaId) return;
         if (Q.find(document)) return;
         if (!remoteVideoTask || !automatic || stopped || !coordinator || D.extract(document).length) return;
@@ -1450,17 +1469,18 @@
             return;
         }
         if (renderedInPage === false) return;
-        if (await recoverVideoLine(video, remoteVideoTask)) return;
+        if (P.mediaKind(video) !== 'audio' && await recoverVideoLine(video, remoteVideoTask)) return;
         if (!video.paused || remotePlayBusy || Date.now() - remotePlayAt < 2000) return;
-        if (remotePlayAttempts >= 10) { pause('视频未能自动播放，请先点播放器的播放按钮再开始自动。'); return; }
+        if (remotePlayAttempts >= 10) { pause(`${label}未能自动播放，请先点播放器的播放按钮再开始自动。`); return; }
         remotePlayAt = Date.now(); remotePlayAttempts++; remotePlayBusy = true;
         applyMediaRate(video, remoteVideoRate);
         try {
-            const play = document.querySelector('.vjs-big-play-button');
+            const play = (video.closest('.video-js') || video.parentElement)?.querySelector('.vjs-big-play-button,button.vjs-play-control');
             if (video.readyState === 0 && D.enabled(play)) play.click();
             try { await video.play(); } catch { if (!selectedMuted) throw new Error('浏览器阻止有声自动播放，请手动播放或勾选静音'); video.muted = true; await video.play(); }
-            remotePlayAttempts = 0; if (!stopped && automatic) report('status', { task: remoteVideoTask, value: '正在播放本节视频…' });
-        } catch { report('status', { task: remoteVideoTask, value: '正在等待新视频加载，尝试自动播放…' }); }
+            if (stopped || !automatic || quietNow()) { video.pause(); return; }
+            remotePlayAttempts = 0; report('status', { task: remoteVideoTask, value: `正在播放本节${label}…` });
+        } catch { report('status', { task: remoteVideoTask, value: `正在等待新${label}加载，尝试自动播放…` }); }
         finally { remotePlayBusy = false; }
     }
     async function start({ recovery = false } = {}) {
@@ -1500,7 +1520,7 @@
                 return;
             }
             if (window.app) { window.app.configs.autoplay = true; window.app.play(); }
-            notify(aiEnabled() ? '自动模式已开启：视频后进入检测；全对继续，未全对按平台剩余次数重做。' : '不接入 AI：自动处理视频和阅读，题目记录后跳过；跳过不等于完成。');
+            notify(aiEnabled() ? '自动模式已开启：音视频和阅读完成后处理检测；全对继续，未全对按平台剩余次数重做。' : '不接入 AI：自动处理音视频和阅读，题目记录后跳过；跳过不等于完成。');
         } else {
             if (!isTop) { const since = Date.now(); report('start'); await D.delay(800); if (grantAt < since && !task) setTask(localTask()); }
             else if (!task) setTask(localTask());
@@ -1699,7 +1719,7 @@
             if (data.type === 'video-ready' && canClaimVideo(event.source, data) &&
                 !(data.ended && expectedCheckTask === courseTask()) && !completedMedia.has(`${data.nonce}/${data.mediaId}`)) {
                 const previous = frames.get(event.source);
-                frames.set(event.source, { nonce: data.nonce, kind: 'video', mediaId: data.mediaId, ended: data.ended,
+                frames.set(event.source, { nonce: data.nonce, kind: 'video', mediaKind: data.mediaKind === 'audio' ? 'audio' : 'video', mediaId: data.mediaId, ended: data.ended,
                     running: previous?.nonce === data.nonce && previous?.running, viewVisible: data.viewVisible, seenAt: Date.now() });
                 post(event.source, 'owner', { target: data.nonce });
                 // The original player owns same-origin videos; the agent is for inaccessible players.
@@ -1795,7 +1815,7 @@
         },
         hasVideoQuiz,
         shouldHold() { if (coursePage() && !automatic) return true;
-            if (coursePage() && P && videoCandidate()) return quietNow() || stopped || hasVideoQuiz() || !!stepTransition;
+            if (coursePage() && P && pageInventory().videos.length) return quietNow() || stopped || hasVideoQuiz() || !!stepTransition || !videoCandidate();
             return quietNow() || hasVideoQuiz() || (coursePage() && (stopped || !!stepTransition || R?.find(pageWindow).some(entry => !topicDone.has(entry.element)) || expectedDocumentTask === courseTask() || F.find(document).length > 0 || expectedCheckTask === courseTask() ||
             (expectedVideoTask !== courseTask() && (checkStep() || (frameClaimTask === courseTask() && Date.now() - frameClaimAt < 4000))))); },
         noteVideoNavigation() {
@@ -1805,7 +1825,7 @@
             expectedCheckTask = ''; expectedVideoTask = courseTask(); frameClaimAt = 0;
             if (automatic && !stopped) notify('已切换到新视频，正在重新接管播放…');
         },
-        onVideoPlaying() { if (automatic && !stopped && !hasVideoQuiz() && !videoLines?.active(window.app?._videoEl) && expectedCheckTask !== courseTask()) notify('正在播放本节视频…'); },
+        onVideoPlaying() { if (automatic && !stopped && !hasVideoQuiz() && !videoLines?.active(window.app?._videoEl) && expectedCheckTask !== courseTask()) notify(`正在播放本节${P?.mediaLabel(window.app?._videoEl) || '视频'}…`); },
         enterCheckStep(status) {
             if (hasVideoQuiz()) return true;
             if (quietNow()) return true;
@@ -1826,6 +1846,7 @@
     document.addEventListener('visibilitychange', recheckForeground);
     window.addEventListener('focus', recheckForeground);
     mount();
+    syncMuted();
     // Preserve only an explicitly started run, in this tab and this course.
     // Stops/errors clear it; first visits and other courses never auto-submit.
     if (isTop && coursePage() && sessionStorage.getItem(autoKey) === '1') start().catch(error => pause(error.message));

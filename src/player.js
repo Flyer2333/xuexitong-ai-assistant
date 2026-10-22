@@ -344,7 +344,7 @@
 
                 $(document).off('click.xuexitongPlayerV3').on('click.xuexitongPlayerV3', '.prev_white,a,button,[role="button"],.posCatalog_name', (e) => {
                     const text = ($(e.currentTarget).text() || "").replace(/\s+/g, "");
-                    if (/^(?:\d+)?(?:视频|安全知识|下一节|上一节)$/.test(text) || e.currentTarget.classList.contains('posCatalog_name')) {
+                    if (/^(?:\d+)?(?:视频|音频|安全知识|下一节|上一节)$/.test(text) || e.currentTarget.classList.contains('posCatalog_name')) {
                         console.log(`%c检测到步骤切换点击：${text}，准备重新接管视频页`, "color:#607D8B");
                         this._reenterVideoMode(true);
                     }

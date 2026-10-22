@@ -255,13 +255,13 @@
             status.textContent = enabled ? '学习流程 · 多模型接入' : '学习流程 · 不接入 AI';
             routingNote.hidden=selectedSummary.hidden=!enabled; aiForm.hidden = !enabled;applySkin();
             for (const action of ['connect','solve']) actions.querySelector(`[data-action="${action}"]`).disabled = !enabled;
-            modeNote.textContent = enabled ? '使用自己的模型接口作答，测试与答题可能产生 API 费用。' : '无需 Key，直接开始。处理视频、文献和专题；题目记录后跳过，视频弹题可能导致当前视频未完成。';
+            modeNote.textContent = enabled ? '使用自己的模型接口作答，测试与答题可能产生 API 费用。' : '无需 Key，直接开始。处理音视频、文献和专题；题目记录后跳过，视频弹题可能导致当前视频未完成。';
         };
         mode.onchange = () => { onAiChange(); GM_setValue('xxt-ai-enabled', mode.value === 'on'); updateMode(); output.textContent = '运行模式已保存，点击“开始自动”继续。'; };
         modeLabel.append(document.createTextNode('运行模式 '),mode); document.addEventListener('xxt-profiles-changed',updateMode); updateMode();
-        const settings = make('div','xxt-settings'), rateLabel = make('label','xxt-rate-setting'), rate = document.createElement('select'); rate.dataset.setting = 'playback-rate'; rate.setAttribute('aria-label','视频倍速');
+        const settings = make('div','xxt-settings'), rateLabel = make('label','xxt-rate-setting'), rate = document.createElement('select'); rate.dataset.setting = 'playback-rate'; rate.setAttribute('aria-label','音视频倍速');
         for (const value of XxtCodexCore.playbackRates) { const option = document.createElement('option'); option.value = value; option.textContent = value === 1 ? '1×（建议）' : `${value}×`; rate.append(option); }
-        rate.value = playbackRate; rate.onchange = () => onRateChange(Number(rate.value)); rateLabel.append(document.createTextNode('视频倍速'),rate);
+        rate.value = playbackRate; rate.onchange = () => onRateChange(Number(rate.value)); rateLabel.append(document.createTextNode('音视频倍速'),rate);
         const mutedInput = document.createElement('input'); mutedInput.type = 'checkbox'; mutedInput.dataset.setting = 'muted'; mutedInput.checked = muted;
         mutedInput.onchange = () => onMutedChange(mutedInput.checked);
         const mutedLabel = document.createElement('label'); mutedLabel.append(mutedInput,document.createTextNode('静音播放'));

@@ -12,6 +12,19 @@
         return !!container && (container.classList.contains('ans-job-finished') ||
             ownIcons(container).some(el => el.getAttribute('aria-label') === '任务点已完成'));
     }
+    const mediaKind = media => media?.tagName === 'AUDIO' ? 'audio' : 'video';
+    const mediaLabel = media => mediaKind(media) === 'audio' ? '音频' : '视频';
+    function playable(doc) {
+        return [...doc.querySelectorAll('video,audio')].filter(media => {
+            if (media.tagName === 'VIDEO') return D.visible(media);
+            // Chaoxing's audio tech element has no visible controls of its own.
+            // Its video.js wrapper is visible; a second, empty audio element is not a task.
+            const player = media.closest('.video-js');
+            return (D.visible(media) || D.visible(player)) &&
+                !!(media.currentSrc || media.getAttribute('src') || media.querySelector('source[src]') ||
+                    (media.id === 'audio_html5_api' && player?.classList.contains('vjs-audio')));
+        });
+    }
     function scan(root) {
         const videos = [], documents = [], questions = [], markers = [], loading = [];
         function visit(win, path, owner = null, skipDocuments = false, depth = 0, inheritedContainer = null) {
@@ -21,9 +34,9 @@
             const files = skipDocuments ? [] : F.find(doc);
             for (const found of files) { const entry = { ...found, taskPoint: taskPoint(found.element) }; documents.push({ id: `document:${path}/${entry.id}`, entry, win,
                 root: entry.element.tagName === 'IFRAME' ? entry.element.contentWindow : win }); }
-            for (const [index, video] of [...doc.querySelectorAll('video')].filter(D.visible).entries()) {
-                videos.push({ id: `video:${path}/${owner?.getAttribute('jobid') || owner?.getAttribute('objectid') || index}`,
-                    video, win, root: win, container: owner?.closest('.ans-attach-ct') || video.closest('.ans-attach-ct') });
+            for (const [index, video] of playable(doc).entries()) {
+                videos.push({ id: `${mediaKind(video)}:${path}/${owner?.getAttribute('jobid') || owner?.getAttribute('objectid') || index}`,
+                    video, mediaKind: mediaKind(video), win, root: win, container: owner?.closest('.ans-attach-ct') || video.closest('.ans-attach-ct') || inheritedContainer });
             }
             const forms = D.extract(doc).filter(entry => D.visible(entry.element)).map(entry => entry.element);
             if (forms.length || D.readResult(doc)) questions.push({ id: `check:${path}`, win, root: win, frame: owner, forms,
@@ -34,7 +47,8 @@
                 // not evidence that its task has been finished.
                 if (!icon) continue;
                 const frame = wrapper.querySelector('iframe');
-                const kind = /video/.test(frame?.getAttribute('src') || '') ? 'video' :
+                const kind = /audio/.test(frame?.getAttribute('src') || '') || frame?.getAttribute('module') === 'insertaudio' ? 'audio' :
+                    /video/.test(frame?.getAttribute('src') || '') ? 'video' :
                     /work|quiz|exam/.test(frame?.getAttribute('src') || '') ? 'check' :
                     /pdf|doc|read|screen/.test(frame?.getAttribute('src') || '') ? 'document' : 'unknown';
                 markers.push({ element: wrapper, kind, done: complete(wrapper), label: icon.getAttribute('aria-label') || '任务点' });
@@ -45,9 +59,11 @@
                 const src = frame.getAttribute('src') || '';
                 visit(frame.contentWindow, childPath, frame, skipDocuments || files.some(entry => entry.element === frame || entry.element.contains(frame)), depth + 1,
                     frame.closest('.ans-attach-ct') || inheritedContainer);
-                if (/\/modules\/video\//.test(src) && videos.length === before) videos.push({
-                    id: `video:${childPath}/${frame.getAttribute('jobid') || frame.getAttribute('objectid') || 'waiting'}`,
-                    video: null, win: frame.contentWindow, root: frame.contentWindow, container: frame.closest('.ans-attach-ct') });
+                if (/\/modules\/(video|audio)\//.test(src) && videos.length === before) {
+                    const kind = /\/modules\/audio\//.test(src) ? 'audio' : 'video';
+                    videos.push({ id: `${kind}:${childPath}/${frame.getAttribute('jobid') || frame.getAttribute('objectid') || 'waiting'}`,
+                        mediaKind: kind, video: null, win: frame.contentWindow, root: frame.contentWindow, container: frame.closest('.ans-attach-ct') });
+                }
                 try {
                     const taskFrame = /\/knowledge\/cards|\/modules\/work\/|\/api\/work(?:[/?]|$)|\/work\/(?:doHomeWorkNew|selectWorkQuestionYiPiYue)/.test(src);
                     const child = frame.contentDocument;
@@ -82,5 +98,5 @@
             D.visible(button) && !button.disabled && button.getAttribute('aria-disabled') !== 'true' &&
             (button.title === '重播' || D.text(button).trim() === '重播')) || null;
     }
-    globalThis.XxtPageTasks = { scan, complete, steps, replayControl, taskPoint };
+    globalThis.XxtPageTasks = { scan, complete, steps, replayControl, taskPoint, playable, mediaKind, mediaLabel };
 })();

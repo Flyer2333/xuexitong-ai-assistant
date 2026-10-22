@@ -23,7 +23,10 @@ function init({ time, delay }) {
     window.GM_xmlhttpRequest = config => {
         let aborted = false;
         if (config.method === 'POST') window.__counts.model++;
+        const probe=config.data?JSON.parse(config.data).questions?.[0]:null;
+        const sum=probe?.id==='text-probe'?probe.text.match(/计算 (\d+) \+ (\d+)/):null;
         setTimeout(() => { if (!aborted) config.onload({ status: 200, responseText: JSON.stringify(config.method === 'GET' ? { ok: true } :
+            sum?{answers:[{id:'text-probe',choices:[],texts:[String(Number(sum[1])+Number(sum[2]))],readable:true,confidence:1,explanation:'Synthetic probe.'}]}:
             { answers: [{ id: 'q1', choices: ['A'], readable: true, confidence: 1, explanation: 'Synthetic answer.' }] }) }); }, delay || 0);
         return { abort() { aborted = true; window.__counts.abort++; config.onabort?.(); } };
     };

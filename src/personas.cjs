@@ -10,6 +10,7 @@
  function fingerprint(c={}){let h=2166136261;const text=JSON.stringify([c.provider,c.protocol,c.baseUrl,c.model,c.key]);for(const ch of text)h=Math.imul(h^ch.charCodeAt(0),16777619);return (h>>>0).toString(16);}
  function explain(error={}){
   const code=String(error.code||'').toLowerCase(),status=Number(error.status)||0;
+  if(code==='text_mismatch')return {title:'文字测试未通过',reason:'服务已响应，但模型没有正确返回本次计算结果；请重新测试或调整模型与推理强度。',certain:true};
   if(code==='local_image_test_unavailable')return {title:'本地服务没有图片测试入口',reason:'请更新本地服务源码、重启 PowerShell，并核对本地服务地址；仅更新油猴脚本不会更新电脑上的服务。',certain:true};
   if(/model_not_found|invalid_model|model_not_exist|model_not_supported/.test(code))return {title:'模型 ID 不存在或不可用',reason:'接口明确拒绝了这个模型 ID，请从服务商控制台复制可用 ID。',certain:true};
   if(/insufficient|balance|quota_exceeded/.test(code)||status===402)return {title:'账户余额或额度不足',reason:'请检查服务商余额、套餐额度及该模型的调用权限。',certain:true};

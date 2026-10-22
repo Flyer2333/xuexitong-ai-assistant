@@ -8,29 +8,64 @@ import {resolve} from 'node:path';
 const require=createRequire(import.meta.url),A=require('../src/ai.js'),P=require('../src/personas.cjs');
 globalThis.XxtCodexCore=require('../src/core.cjs');globalThis.XxtPersonas=P;
 const local={...A.defaults,provider:'codex',protocol:'codex',model:'',baseUrl:'http://127.0.0.1:18763',key:'a'.repeat(64),vision:true};
-test('local image challenge uses authenticated image endpoint and carries no expected answer',()=>{
+const answers=text=>({answers:[{id:'image-probe',choices:[],texts:[text],readable:true,confidence:1,explanation:'fixture'}]});
+
+test('local image challenge uses the existing authenticated solve route without an expected answer',()=>{
  const spec=A.build(local,{imageChallenge:true,images:['fixture-image'],code:'must-not-send'});
- assert.equal(spec.url,local.baseUrl+'/image-test');assert.equal(spec.method,'POST');assert.deepEqual(spec.body,{images:['fixture-image']});assert.equal(spec.headers.Authorization,'Bearer '+local.key);
- assert.deepEqual(A.parse('codex',{code:'012345',model:'gpt-6-luna',reasoningEffort:'low'},undefined,false,true),{code:'012345',model:'gpt-6-luna',reasoningEffort:'low'});
- assert.equal(A.parse('codex',{code:'description 012345'},undefined,false,true).code,'');
+ assert.equal(spec.url,local.baseUrl+'/solve');assert.equal(spec.method,'POST');assert.deepEqual(spec.body.images,['fixture-image']);assert.equal(spec.body.questions[0].id,'image-probe');assert.deepEqual(spec.body.imageManifest,[{image:1,questionIds:['image-probe']}]);assert(!JSON.stringify(spec.body).includes('must-not-send'));assert.equal(spec.headers.Authorization,'Bearer '+local.key);
+ assert.deepEqual(A.parse('codex',{...answers('012345'),model:'gpt-6-luna',reasoningEffort:'low'},undefined,false,true),{code:'012345',model:'gpt-6-luna',reasoningEffort:'low'});
+ assert.equal(A.parse('codex',answers('description 012345'),undefined,false,true).code,'');
 });
 test('health preserves only safe server-selected metadata; no inference claim',()=>{
  const parsed=A.parse('codex',{ok:true,model:'gpt-6-luna',reasoningEffort:'low',imageTestReady:true},undefined,true);
  assert.equal(parsed.kind,'health');assert.equal(parsed.model,'gpt-6-luna');assert.equal(parsed.reasoningEffort,'low');
  assert(!Object.hasOwn(A.parse('codex',{ok:true,model:'bad\nmodel'},undefined,true),'model'));
 });
-test('both local roles share one GET health and never call image inference; actual model is displayed',async()=>{
- const data={'xxt-ai-config':{...local,vision:false},'xxt-ai-vision-config':local,'xxt-ai-vision-enabled':true};
- globalThis.GM_getValue=(k,d)=>data[k]??d;globalThis.GM_setValue=(k,v)=>{data[k]=v;};let calls=0,marked=0;
- globalThis.XxtProfiles={create:()=>({markUsed:()=>{marked++;}})};
- globalThis.GM_xmlhttpRequest=spec=>{calls++;assert.equal(spec.method,'GET');assert(spec.url.endsWith('/health'));assert.equal(spec.data,undefined);queueMicrotask(()=>spec.onload({status:200,responseText:JSON.stringify({ok:true,model:'gpt-6-luna',reasoningEffort:'low',imageTestReady:true})}));return {abort(){spec.onabort();}};};
- const result=await A.testSelected().promise;assert(result.success);assert.equal(calls,1);assert.equal(marked,0);assert.equal(result.results.length,2);assert(result.results.every(x=>x.kind==='health'&&x.model==='gpt-6-luna'&&x.character==='openai'));
+function setupSelected({image=true,health=true,wrongText=false,wrongImage=false,hang=false}={}){
+ const data={'xxt-ai-config':{...local,vision:false},'xxt-ai-vision-config':local,'xxt-ai-vision-enabled':image},calls=[];
+ let digits='',marked=0,aborted=0;
+ globalThis.document={createElement:()=>({getContext:()=>({fillRect(){},fillText(value){digits=value;}}),toDataURL:()=> 'data:image/png;base64,fixture'}),dispatchEvent(){}};
+ globalThis.GM_getValue=(k,d)=>data[k]??d;globalThis.GM_setValue=(k,v)=>{data[k]=v;};globalThis.XxtProfiles={create:()=>({markUsed:()=>marked++})};
+ globalThis.GM_xmlhttpRequest=spec=>{
+  calls.push(spec);queueMicrotask(()=>{
+   if(spec.url.endsWith('/health')){spec.onload({status:200,responseText:JSON.stringify({ok:health,model:'gpt-6-luna',reasoningEffort:'low'})});return;}
+   if(hang)return;
+   const body=JSON.parse(spec.data),q=body.questions[0],numbers=q.text.match(/计算 (\d+) \+ (\d+)/);
+   const value=q.id==='text-probe'?(wrongText?'wrong':String(Number(numbers[1])+Number(numbers[2]))):(wrongImage?'wrong':digits);
+   const result={answers:[{id:q.id,choices:[],texts:[value],readable:true,confidence:1,explanation:'fixture'}]};
+   spec.onload({status:200,responseText:JSON.stringify(result)});
+  });return {abort(){aborted++;spec.onabort();}};
+ };
+ return {data,calls,get marked(){return marked;},get aborted(){return aborted;}};
+}
+
+test('one connection click tests text and image through solve even on an older bridge, health is deduplicated',async()=>{
+ const fixture=setupSelected();const result=await A.testSelected().promise;
+ assert(result.success);assert.equal(fixture.calls.filter(x=>x.method==='GET').length,1);assert.equal(fixture.calls.filter(x=>x.url.endsWith('/solve')).length,2);
+ assert.equal(fixture.marked,2);assert(result.results.every(x=>x.success&&x.kind!=='health'&&x.model==='gpt-6-luna'&&x.character==='openai'&&x.reasoningEffort==='low'));
+ assert.equal(fixture.data['xxt-image-capability'].verified,true);
 });
-test('old bridge image endpoint produces actionable local-service guidance',async()=>{
- let sent;globalThis.GM_xmlhttpRequest=spec=>{sent=spec;return {abort(){spec.onabort();}};};
- const task=A.transport(local,'/image-test',{imageChallenge:true,images:['fixture']});sent.onload({status:404,responseText:'{"error":"未提供此接口"}'});
- await assert.rejects(task.promise,error=>{assert.equal(error.code,'LOCAL_IMAGE_TEST_UNAVAILABLE');assert.match(P.explain(error).reason,/更新本地服务源码/);assert(!P.explain(error).reason.includes('余额'));return true;});
+
+test('text-only selection makes one real text probe and no image probe',async()=>{
+ const fixture=setupSelected({image:false});assert((await A.testSelected().promise).success);assert.equal(fixture.calls.length,2);assert.equal(JSON.parse(fixture.calls[1].data).images.length,0);
 });
+
+test('reachable health alone does not pass when model answer is wrong',async()=>{
+ setupSelected({image:false,wrongText:true});const result=await A.testSelected().promise;assert.equal(result.success,false);assert.equal(result.results[0].title,'文字测试未通过');assert.equal(result.results[0].model,'gpt-6-luna');
+});
+
+test('wrong image keeps text success and does not mark image capability',async()=>{
+ const fixture=setupSelected({wrongImage:true});const result=await A.testSelected().promise;assert.equal(result.success,false);assert(result.results[0].success);assert.equal(result.results[1].title,'图片识别未通过');assert.equal(fixture.data['xxt-image-capability'],undefined);
+});
+
+test('failed health does not start any model probe',async()=>{
+ const fixture=setupSelected({health:false});assert.equal((await A.testSelected().promise).success,false);assert(fixture.calls.every(x=>x.method==='GET'));
+});
+
+test('cancel while text inference is pending prevents image inference and success result',async()=>{
+ const fixture=setupSelected({hang:true}),task=A.testSelected();for(let n=0;n<10&&fixture.calls.length<2;n++)await new Promise(r=>setImmediate(r));task.abort();await assert.rejects(task.promise,/停止/);assert.equal(fixture.calls.length,2);assert.equal(fixture.aborted,1);assert.equal(fixture.marked,0);
+});
+
 test('local image request remains cancellable',async()=>{
  let aborted=0;globalThis.GM_xmlhttpRequest=spec=>({abort(){aborted++;spec.onabort();}});
  const task=A.transport(local,'/image-test',{imageChallenge:true,images:['fixture']});task.abort();await assert.rejects(task.promise,/停止/);assert.equal(aborted,1);
@@ -68,4 +103,12 @@ test('pending image request holds busy lock and client cancellation terminates f
   let busy=true;for(let n=0;n<100&&busy;n++){await new Promise(r=>setTimeout(r,20));busy=(await(await server.request('/health')).json()).busy;}
   assert.equal(busy,false);await assert.rejects(access(resolve(server.dir,'fake-completed')));assert.throws(()=>process.kill(execution.pid,0));
  }finally{controller.abort();await rejected;await server.stop();}
+});
+
+test('existing solve route handles both text and image probes without the newer image-test endpoint',async()=>{
+ const server=await bridge();try{
+  const text={questions:[{id:'text-probe',type:'blank',text:'计算 17 + 28，只将计算结果填写在一个输入框中。',options:[],slots:1}],images:[],imageManifest:[]};
+  const response=await server.request('/solve',text);assert.equal(response.status,200);assert.equal((await response.json()).answers[0].texts[0],'45');
+  const image=A.build(local,{imageChallenge:true,...body});assert.equal(image.url,local.baseUrl+'/solve');const result=await(await server.request('/solve',image.body)).json();assert.equal(A.parse('codex',result,undefined,false,true).code,'012345');
+ }finally{await server.stop();}
 });

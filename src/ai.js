@@ -46,7 +46,8 @@
     }
     function build(config, payload, probe = false) {
         const c = normalize(config), headers = { 'Content-Type': 'application/json' };
-        if (c.protocol === 'codex' && payload?.imageChallenge) return { url: c.baseUrl + '/image-test', method: 'POST', headers: { ...headers, Authorization: `Bearer ${c.key}` }, body: { images: payload.images }, protocol: c.protocol };
+        // Use the existing answer route so already-running older bridges can test images too.
+        if (c.protocol === 'codex' && payload?.imageChallenge) return { url: c.baseUrl + '/solve', method: 'POST', headers: { ...headers, Authorization: `Bearer ${c.key}` }, body: {questions:[localImageQuestion()],images:payload.images,imageManifest:[{image:1,questionIds:['image-probe']}]}, protocol: c.protocol };
         if (c.protocol === 'codex') return { url: c.baseUrl + (probe ? '/health' : '/solve'), method: probe ? 'GET' : 'POST', headers: { ...headers, Authorization: `Bearer ${c.key}` }, body: probe ? undefined : payload, protocol: c.protocol };
         const text = payload?.imageChallenge ? '只识别图片中的六位数字，保留前导零。只返回 JSON：{"code":"六位数字"}。不要解释。' : probe ? '只回复 JSON：{"ok":true}。这是连接测试。' : prompt(payload, c.vision);
         const images = probe || !c.vision ? [] : payload.images || [];
@@ -87,6 +88,7 @@
         if (/\/(chat\/completions|responses|messages)$|:generateContent$/.test(c.baseUrl)) throw new Error('请填写 Base URL，不要包含 chat/completions、responses 等具体接口路径');
         return { url: c.baseUrl + suffix, method: 'POST', headers, body, protocol: c.protocol };
     }
+    function localImageQuestion(){return {id:'image-probe',type:'blank',text:'请识别图片中的六位数字，保留前导零；只将数字填写在一个输入框中。',options:[],slots:1,requiresVision:true};}
     function localMetadata(data) {
         const result={};
         if(typeof data.model==='string'&&/^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,199}$/.test(data.model))result.model=data.model;
@@ -97,7 +99,11 @@
     function parse(protocol, data, questions, probe = false, imageTest = false) {
         if (protocol === 'codex') {
             if (probe) { if (!data.ok) throw new Error('本地服务未就绪'); return { ok: true, kind: 'health', ...localMetadata(data) }; }
-            if (imageTest) return {code:typeof data.code==='string'&&/^\d{6}$/.test(data.code)?data.code:'',...localMetadata(data)};
+            if (imageTest) {
+                const answer=root.XxtCodexCore.validateAnswers([localImageQuestion()],data,{allowUncertain:true})[0];
+                const code=answer.readable&&answer.confidence>=0.8?answer.texts[0].trim():'';
+                return {code:/^\d{6}$/.test(code)?code:'',...localMetadata(data)};
+            }
             return { answers: root.XxtCodexCore.validateAnswers(questions, data, { allowUncertain: true }) };
         }
         if (data.status === 'incomplete') throw new Error('模型输出未完成，请增加输出上限或降低推理强度');
@@ -173,6 +179,16 @@
             progress:info => root.XxtRequestProgress?.(info) });
     }
     function imageConfig(){const c=GM_getValue('xxt-ai-vision-enabled',false)?load('xxt-ai-vision-config'):null;return c?.key?c:null;}
+    function testLocalText(config){
+        const random=new Uint32Array(2);crypto.getRandomValues(random);
+        const [a,b]=[...random].map(n=>n%80+10),expected=String(a+b);
+        const job=transport({...config,vision:false},'/solve',{questions:[{id:'text-probe',type:'blank',text:`计算 ${a} + ${b}，只将计算结果填写在一个输入框中。`,options:[],slots:1}],images:[],imageManifest:[]});
+        return {abort:()=>job.abort(),promise:job.promise.then(result=>{
+            const answer=result.answers[0];
+            if(!answer.readable||answer.confidence<0.8||answer.texts[0].trim()!==expected){const error=Error('文字测试结果不正确');error.code='TEXT_MISMATCH';throw error;}
+            return {verified:true};
+        })};
+    }
     function testSelected(){
         let active,cancelled=false;
         const promise=(async()=>{
@@ -181,18 +197,24 @@
             if(!tasks.length)throw Error('请先保存接口，并选择用于文字或图片。');
             for(const task of tasks){
                 if(cancelled)throw Error('已停止本次 AI 测试');
+                let metadata={};
                 try{
                     if(task.config.protocol==='codex'){
                         const identity=JSON.stringify([task.config.baseUrl,task.config.key]);
                         let checked=localChecks.get(identity);
                         if(!checked){active=transport({...task.config,vision:false},'/health');checked=await active.promise;localChecks.set(identity,checked);}
-                        results.push({role:task.role,provider:task.config.provider,model:checked.model||task.config.model,reasoningEffort:checked.reasoningEffort,character:root.XxtPersonas?.character(task.config),success:true,kind:'health',imageTestReady:checked.imageTestReady===true});
+                        metadata=localMetadata(checked);
+                        active=task.role==='图片'?testImages(task.config):testLocalText(task.config);
+                        const result=await active.promise;
+                        if(cancelled)throw Error('已停止本次 AI 测试');
+                        if(!result.verified){const error=Error(result.message);error.code='IMAGE_MISMATCH';throw error;}
+                        results.push({role:task.role,provider:task.config.provider,model:metadata.model||task.config.model,reasoningEffort:metadata.reasoningEffort,character:root.XxtPersonas?.character(task.config),success:true});
                         continue;
                     }
                     active=task.role==='图片'?testImages(task.config):transport(task.config,'/health');const result=await active.promise;
                     if(task.role==='图片'&&!result.verified){const error=Error(result.message);error.code='IMAGE_MISMATCH';throw error;}
                     results.push({role:task.role,provider:task.config.provider,model:task.config.model,character:root.XxtPersonas?.character(task.config),success:true});
-                }catch(error){if(cancelled||/停止|取消/.test(error.message))throw error;results.push({role:task.role,provider:task.config.provider,model:task.config.model,character:root.XxtPersonas?.character(task.config),success:false,...root.XxtPersonas.explain(error)});}
+                }catch(error){if(cancelled||/停止|取消/.test(error.message))throw error;results.push({role:task.role,provider:task.config.provider,model:metadata.model||task.config.model,reasoningEffort:metadata.reasoningEffort,character:root.XxtPersonas?.character(task.config),success:false,...root.XxtPersonas.explain(error)});}
             }
             return {success:results.every(r=>r.success),results};
         })();return {promise,abort(){cancelled=true;active?.abort();}};

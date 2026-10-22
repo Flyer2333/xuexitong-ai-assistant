@@ -1547,6 +1547,8 @@
                     if (action === 'connect') {
                         if (!aiEnabled()) { notify('不接入 AI 模式无需连接测试，点击“开始自动”即可。'); return; }
                         if (busy) throw new Error('请先停止当前任务再测试 AI');
+                        if (quietNow()) { notify('夜间休息中，07:00 后可测试 AI'); return; }
+                        button.disabled=true;button.textContent='正在测试…';
                         apiFailureShown=false;apiFailureUntil=0;
                         let result;
                         try{result=await request('/test-selected');}catch(error){
@@ -1556,6 +1558,7 @@
                         globalThis.XxtAssistantTheme.testResult(button,result);
                     }
                 } catch (error) { notify(error.message); }
+                finally { if(action==='connect'){button.disabled=false;button.textContent=label;} }
             });
             actions.append(button);
         }

@@ -38,7 +38,7 @@
     let topicOwner = null, topicReportedTask = '';
     let pageReviewNeeded = false, pageSignature = '', pageChangedAt = 0, pageBlockedAt = 0;
     let pageVideo = null, pagePlaying = false, stepTransition = null, currentCard = '', stepDone = new Set();
-    const startedVideos = new WeakSet();
+    let startedVideos = new WeakSet();
     const recoveryAttempts = new Set();
     const skippedChapters = new Set();
     const skippedAssets = new Set();
@@ -341,9 +341,10 @@
             const worker = [...frames].find(([source, entry]) => entry.kind === 'video' && covers(asset, source, 'video'))?.[1];
             if (worker?.running && !worker.ended && !completedMedia.has(`${worker.nonce}/${worker.mediaId}`)) return false;
         }
-        // Platform credit can turn green at 90%, before a final popup. Once a
-        // loaded video is in progress, wait for its actual ended event instead.
-        if (video && (startedVideos.has(video) || (video.readyState > 0 && Number.isFinite(video.duration) && video.currentTime > 0)))
+        // Credit can turn green at 90%, before a final popup. Wait for ended
+        // only for media started in this run. A previously completed player may
+        // restore its old currentTime or autoplay before the user presses Start.
+        if (video && startedVideos.has(video))
             return video.ended;
         return video?.ended || P.complete(asset.container) || sourceFinished(asset, 'video');
     }
@@ -471,6 +472,7 @@
     async function coordinatePage() {
         const view = pageInventory();
         if (!view) return false;
+        for (const asset of view.videos) if (asset.video && !startedVideos.has(asset.video) && P.complete(asset.container)) asset.video.pause();
         if (settleEndedVideos(view)) return true;
         const pending = view.videos.find(asset => !videoDone(asset));
         if (pending) {
@@ -630,6 +632,14 @@
         if (coursePage()) for (const [source, entry] of controlledFrames()) post(source, 'set-muted', { target: entry.nonce, task: courseTask(), muted: selectedMuted });
     }
     function changeMuted(value) { selectedMuted = !!value; GM_setValue('xxt-video-muted', selectedMuted); syncMuted(); }
+    function keepMediaMuted(event) {
+        const media = event.target;
+        if (!media?.matches?.('video,audio') || !P?.playable(document).includes(media)) return;
+        // Every frame reads the shared preference even before it is granted a
+        // task. Player load/replay/volume reset must not undo a checked mute.
+        selectedMuted = GM_getValue('xxt-video-muted', true) !== false;
+        if (selectedMuted && !media.muted) media.muted = true;
+    }
     const audioBlocked = () => pause('浏览器阻止有声自动播放，请手动播放或勾选静音后重新开始');
     function dismissInterruptions() {
         if (!automatic || stopped || quietNow()) return;
@@ -1456,8 +1466,9 @@
         const video = P?.playable(document)[0] || null;
         if (!video) return;
         const label = P.mediaLabel(video);
-        // Keep the audio preference for manual replay as well as granted runs.
-        if (P.mediaKind(video) === 'audio' && video.muted !== selectedMuted) video.muted = selectedMuted;
+        // Manual/replaced players can exist while automation is stopped.
+        selectedMuted = GM_getValue('xxt-video-muted', true) !== false;
+        if (selectedMuted && !video.muted) video.muted = true;
         const identity = video.currentSrc || video.src || '';
         if (video !== remoteVideo || identity !== remoteMediaIdentity) {
             remoteVideo = video; remoteMediaIdentity = identity; remoteMediaId = crypto.randomUUID(); remoteVideoEnded = false; remotePlayAttempts = 0;
@@ -1488,8 +1499,9 @@
         } catch { report('status', { task: remoteVideoTask, value: `正在等待新${label}加载，尝试自动播放…` }); }
         finally { remotePlayBusy = false; }
     }
-    async function start({ recovery = false } = {}) {
+    async function start({ recovery = false, manual = false } = {}) {
         if (unloaded) { notify('页面运行已结束，请刷新课程页后重新点击“开始自动”。'); return; }
+        if (manual) { startedVideos = new WeakSet(); for (const entry of frames.values()) if (entry.kind === 'video') entry.running = false; }
         if (!recovery) { apiFailureShown=false;apiFailureUntil=0;retryQueue=null; recoverySerial++; recovering = false; inFlight?.abort(); XxtAi.cancelImageTest(); videoLines?.reset(); }
         if (isTop && coursePage()) sessionStorage.setItem(autoKey, '1');
         if (quietNow()) { suspendForQuiet(); resumeAfterQuiet = true; notify('已预约：夜间休息中，07:00 后自动开始（北京时间）'); return; }
@@ -1560,7 +1572,7 @@
                 let connectionNotice,connectionTimer;
                 try {
                     if (action === 'stop') stop();
-                    if (action === 'start') await start();
+                    if (action === 'start') await start({ manual: true });
                     if (action === 'solve') {
                         if (!aiEnabled()) { notify('不接入 AI 模式不提供答案；如需此功能，请先切换为接入 AI。'); return; }
                         recoverySerial++; recovering = false; inFlight?.abort(); XxtAi.cancelImageTest();
@@ -1852,6 +1864,7 @@
     };
     window.addEventListener('message', handleMessage);
     document.addEventListener('visibilitychange', recheckForeground);
+    for (const type of ['loadedmetadata','play','volumechange']) document.addEventListener(type, keepMediaMuted, true);
     window.addEventListener('focus', recheckForeground);
     mount();
     syncMuted();
@@ -1859,5 +1872,5 @@
     // Stops/errors clear it; first visits and other courses never auto-submit.
     if (isTop && coursePage() && sessionStorage.getItem(autoKey) === '1') start().catch(error => pause(error.message));
     const timer = setInterval(() => { tick().catch(error => pause(error.message)); }, 700);
-    window.addEventListener('pagehide', () => { locator.close(); topicOwner?.cancel(); closeDocument(); cancelConfirmation(); pendingConfirmations.clear(); unloaded = true; stopped = true; epoch++; inFlight?.abort(); XxtAi.cancelImageTest(); visibilityObserver?.disconnect(); clearInterval(timer); }, { once: true });
+    window.addEventListener('pagehide', () => { locator.close(); topicOwner?.cancel(); closeDocument(); cancelConfirmation(); pendingConfirmations.clear(); unloaded = true; stopped = true; epoch++; inFlight?.abort(); XxtAi.cancelImageTest(); visibilityObserver?.disconnect(); clearInterval(timer); for (const type of ['loadedmetadata','play','volumechange']) document.removeEventListener(type, keepMediaMuted, true); }, { once: true });
 })();

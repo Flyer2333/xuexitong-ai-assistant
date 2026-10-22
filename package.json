@@ -33,7 +33,9 @@
     "test:codex-connection": "node tests/verify-codex-connection.mjs",
     "test:start": "node tests/verify-start-after-test.mjs",
     "test:completed-documents": "node tests/verify-completed-documents.mjs",
-    "test:large-pages": "node tests/verify-large-pages.mjs"
+    "test:large-pages": "node tests/verify-large-pages.mjs",
+    "test:completed-media": "node tests/verify-completed-media.mjs",
+    "test:video-mute": "node tests/verify-video-mute.mjs"
   },
   "engines": {
     "node": ">=20.11"

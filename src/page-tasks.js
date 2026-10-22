@@ -33,7 +33,8 @@
             try { doc = win.document; if (!doc?.body) return; } catch { return; }
             const files = skipDocuments ? [] : F.find(doc);
             for (const found of files) { const entry = { ...found, taskPoint: taskPoint(found.element) }; documents.push({ id: `document:${path}/${entry.id}`, entry, win,
-                root: entry.element.tagName === 'IFRAME' ? entry.element.contentWindow : win }); }
+                root: entry.element.tagName === 'IFRAME' ? entry.element.contentWindow : win,
+                container: entry.element.closest('.ans-attach-ct') || owner?.closest('.ans-attach-ct') || inheritedContainer }); }
             for (const [index, video] of playable(doc).entries()) {
                 videos.push({ id: `${mediaKind(video)}:${path}/${owner?.getAttribute('jobid') || owner?.getAttribute('objectid') || index}`,
                     video, mediaKind: mediaKind(video), win, root: win, container: owner?.closest('.ans-attach-ct') || video.closest('.ans-attach-ct') || inheritedContainer });

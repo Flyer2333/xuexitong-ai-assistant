@@ -1,9 +1,11 @@
 /* Independently implemented request routing. No third-party implementation is bundled. */
 (function (root) {
     const needsVision = q => !!(q.obfuscated || q.imageKey || q.requiresVision || q.options?.some(o => o.imageKey) || /[\ue000-\uf8ff\ufffd]/u.test([q.text,...(q.options||[]).map(o=>o.text)].join(' ')));
-    function batches(payload, { routing = true, size = 8, limit = 12000 } = {}) {
+    const core = typeof module === 'object' && module.exports ? require('./core.cjs') : root.XxtCodexCore;
+    function batches(payload, { routing = true, size, limit = 12000 } = {}) {
         const groups = new Map(), questions = payload.questions || [];
-        if (questions.length > 200) throw new Error('单页最多处理200题，请缩小范围');
+        if (questions.length > core.pageQuestionLimit) throw new Error(`单页最多处理${core.pageQuestionLimit}题，请缩小范围`);
+        if (size !== undefined && (!Number.isInteger(size) || size < 1 || size > 20)) throw new Error('每批题数必须为1–20');
         for (let i = 0; i < questions.length; i++) {
             const q = questions[i], vision = !routing || needsVision(q), key = !routing ? 'legacy' : vision ? 'vision' : 'text';
             const own = payload.imageQuestionIds ? (payload.imageQuestionIds.includes(q.id) ? [payload.images[payload.imageQuestionIds.indexOf(q.id)]] : []) :
@@ -14,6 +16,7 @@
         }
         const result = [];
         for (const [kind, entries] of groups) {
+            const batchSize = size ?? (kind === 'text' ? 16 : 8);
             let part = [], weight = 0;
             const flush = () => {
                 if (!part.length) return;
@@ -26,7 +29,7 @@
             };
             for (const entry of entries) {
                 const n = JSON.stringify(entry.q).length;
-                if (part.length && (part.length >= size || weight + n > limit)) flush();
+                if (part.length && (part.length >= batchSize || weight + n > limit)) flush();
                 part.push(entry); weight += n;
             }
             flush();

@@ -1,6 +1,7 @@
 /* Shared validation for the browser assistant and the local Codex bridge. */
 (function (root) {
     const supported = new Set(['single', 'multiple', 'boolean','blank','essay']);
+    const pageQuestionLimit = 256;
     const textQuestion = q => ['blank','essay'].includes(q.type);
     const playbackRates = [1, 1.25, 1.5, 1.75, 2];
     const normalizePlaybackRate = value => playbackRates.includes(Number(value)) ? Number(value) : 1;
@@ -27,7 +28,7 @@
         return questions;
     }
     function validateAnswers(questions, result, { allowUncertain = false } = {}) {
-        validateQuestions(questions, 200);
+        validateQuestions(questions, pageQuestionLimit);
         if (!result || !Array.isArray(result.answers) || result.answers.length !== questions.length) throw new Error('模型未返回全部题目的答案');
         const ids = new Set();
         return result.answers.map(answer => {
@@ -118,7 +119,7 @@
         const hour = new Date(timestamp + 8 * 60 * 60 * 1000).getUTCHours();
         return hour >= 23 || hour < 7;
     }
-    const api = { validateQuestions, validateAnswers, resolveAnswers, recallAnswers, normalizeQuestionText, validateHistory, nextAction, quietHoursAt, playbackRates, normalizePlaybackRate };
+    const api = { pageQuestionLimit, validateQuestions, validateAnswers, resolveAnswers, recallAnswers, normalizeQuestionText, validateHistory, nextAction, quietHoursAt, playbackRates, normalizePlaybackRate };
     if (typeof module !== 'undefined' && module.exports) module.exports = api;
     else root.XxtCodexCore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

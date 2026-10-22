@@ -20,10 +20,33 @@ test('content dedup preserves all referring question IDs; batch limits and histo
 });
 test('cancel aborts the active batch and never sends the next; later failure returns no partial answers',async()=>{
  let calls=0,aborted=false,reject;
- const job=D.run({questions:Array.from({length:9},(_,i)=>q('q'+i))},{base:{},transport:()=>{calls++;return{promise:new Promise((_,r)=>reject=r),abort(){aborted=true;reject(Error('cancelled'));}};}});
+ const job=D.run({questions:Array.from({length:17},(_,i)=>q('q'+i))},{base:{},transport:()=>{calls++;return{promise:new Promise((_,r)=>reject=r),abort(){aborted=true;reject(Error('cancelled'));}};}});
  job.abort();await assert.rejects(job.promise);assert(aborted);assert.equal(calls,1);
  calls=0;
  await assert.rejects(D.run({questions:[q('a'),q('b',true)],images:['p'],imageQuestionIds:['b']},{base:{vision:true},vision:{key:'image-fixture'},transport:()=>({promise:++calls===1?Promise.resolve({answers:[{id:'a'}]}):Promise.reject(Error('failed'))})}).promise,/failed/);
+});
+
+test('216/256 questions retain order, text 16 and vision 8, bounded history and complete answer validation',async()=>{
+ const core=require('../src/core.cjs');
+ for(const count of [216,256]){
+  const questions=Array.from({length:count},(_,i)=>q('q'+i)),calls=[];
+  const answers=await D.run({questions,history:[{finalScore:60,maxScore:100,answers:questions.map(q=>({id:q.id,choices:['B']})),review:[]}]},{base:{},transport:(_,path,payload)=>{
+   core.validateQuestions(payload.questions);core.validateHistory(payload.history);calls.push(payload.questions.length);
+   return{promise:Promise.resolve({answers:payload.questions.map(q=>({id:q.id,choices:['A'],readable:true,confidence:1,explanation:'fixture'}))})};
+  }}).promise;
+  assert.equal(calls.length,Math.ceil(count/16));assert(calls.every(n=>n<=16));
+  assert.deepEqual(core.validateAnswers(questions,answers).map(a=>a.id),questions.map(q=>q.id));
+ }
+ const visual=Array.from({length:256},(_,i)=>q('v'+i,true));
+ const parts=D.batches({questions:visual,images:visual.map(()=>'shared'),imageQuestionIds:visual.map(q=>q.id)});
+ assert.equal(parts.length,32);assert(parts.every(p=>p.questions.length===8&&p.images.length===1&&p.imageManifest[0].questionIds.length===8));
+ const tooMany=Array.from({length:257},(_,i)=>q('q'+i));
+ assert.throws(()=>D.batches({questions:tooMany}),/256/);
+ assert.throws(()=>core.validateQuestions(tooMany,core.pageQuestionLimit),/256/);
+ assert.throws(()=>core.validateAnswers(tooMany,{answers:[]}),/256/);
+ assert.throws(()=>D.batches({questions:[q('a') ]},{size:21}),/1–20/);
+ const long=Array.from({length:16},(_,i)=>({...q('long'+i),text:'长'.repeat(3000)}));
+ assert(D.batches({questions:long}).every(p=>p.questions.length<16&&p.questions.reduce((n,q)=>n+JSON.stringify(q).length,0)<=12000));
 });
 test('special fonts and rendered formulas require vision; configured text-only model cannot silently receive images',async()=>{
  assert(D.needsVision({...q('a'),obfuscated:true}));assert(D.needsVision({...q('a'),requiresVision:true}));

@@ -347,7 +347,7 @@
             return video.ended;
         return video?.ended || P.complete(asset.container) || sourceFinished(asset, 'video');
     }
-    function fileDone(asset) { return skippedAssets.has(asset.id) || (GM_getValue(`xxt-documents:${task}`, []) || []).includes(asset.entry?.id) ||
+    function fileDone(asset) { return skippedAssets.has(asset.id) || P.complete(asset.container) || (GM_getValue(`xxt-documents:${task}`, []) || []).includes(asset.entry?.id) ||
         completedFileAssets.has(asset.id) || (!asset.entry && sourceFinished(asset, 'document')); }
     function questionDone(asset) { return skippedAssets.has(asset.id) || sourceFinished(asset, 'check') || (asset.win === pageWindow && record.phase === 'done'); }
     function pendingKnowledge(view = pageInventory()) {
@@ -582,6 +582,10 @@
                 if(!isTop&&!coursePage())report('ai-call-failed',{task,wasAutomatic});
             }
             throw error;
+        }).finally(() => {
+            // A finished connection test must not keep the grade/redo scheduler
+            // locked. An older request must never clear a newer request's handle.
+            if (inFlight === job) inFlight = null;
         });
     }
     function beforeClick() {
@@ -750,7 +754,7 @@
         };
         try {
             if(!questions.length&&omitted.length){if(submit)await skipImages();else notify(`未配置图片接口，${omitted.length} 道图片题已跳过。`);return;}
-            XxtCodexCore.validateQuestions(questions, 200);
+            XxtCodexCore.validateQuestions(questions, XxtCodexCore.pageQuestionLimit);
             const learned = XxtCodexCore.recallAnswers(questions, record.knownAnswers || []);
             const retryPlan = XxtRetry.plan(questions, retryAttempts());
             const pendingEntries = entries.filter(entry => !learned.some(answer => answer.id === entry.question.id));
@@ -1058,7 +1062,8 @@
     }
     async function readDocuments(override) {
         if (!override && (D.extract(document).length || D.readResult(document) || (coursePage() && expectedCheckTask === courseTask()))) return false;
-        const entries = override || F.find(document).filter(entry => !grantedDocumentIds || grantedDocumentIds.includes(entry.id));
+        const entries = (override || F.find(document).filter(entry => !grantedDocumentIds || grantedDocumentIds.includes(entry.id)))
+            .filter(entry => !P?.complete(entry.element.closest('.ans-attach-ct')));
         const already = new Set(GM_getValue(`xxt-documents:${task}`, []) || []);
         if (!entries.length || entries.every(entry => already.has(entry.id))) return false;
         if (coursePage()) expectedDocumentTask = courseTask();
@@ -1484,6 +1489,7 @@
         finally { remotePlayBusy = false; }
     }
     async function start({ recovery = false } = {}) {
+        if (unloaded) { notify('页面运行已结束，请刷新课程页后重新点击“开始自动”。'); return; }
         if (!recovery) { apiFailureShown=false;apiFailureUntil=0;retryQueue=null; recoverySerial++; recovering = false; inFlight?.abort(); XxtAi.cancelImageTest(); videoLines?.reset(); }
         if (isTop && coursePage()) sessionStorage.setItem(autoKey, '1');
         if (quietNow()) { suspendForQuiet(); resumeAfterQuiet = true; notify('已预约：夜间休息中，07:00 后自动开始（北京时间）'); return; }
@@ -1521,6 +1527,8 @@
             }
             if (window.app) { window.app.configs.autoplay = true; window.app.play(); }
             notify(aiEnabled() ? '自动模式已开启：音视频和阅读完成后处理检测；全对继续，未全对按平台剩余次数重做。' : '不接入 AI：自动处理音视频和阅读，题目记录后跳过；跳过不等于完成。');
+            if (busy) notify('正在结束上一轮任务，请稍候；仍无进展时请停止并刷新课程页。');
+            else await tick();
         } else {
             if (!isTop) { const since = Date.now(); report('start'); await D.delay(800); if (grantAt < since && !task) setTask(localTask()); }
             else if (!task) setTask(localTask());
